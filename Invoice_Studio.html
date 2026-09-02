@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Invoice Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,450;0,9..144,560;0,9..144,650;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#1B1D22;
+    --ink-soft:#3A3D45;
+    --paper:#FBF9F5;
+    --card:#FFFFFF;
+    --slate:#767A85;
+    --line:#E7E2D6;
+    --brass:#9C7A3C;
+    --brass-deep:#7C5F2C;
+    --brass-tint:#F1E9D6;
+    --danger:#B4483F;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter', -apple-system, sans-serif;
+    min-height:100vh;
+  }
+
+  /* ---------- App shell ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 28px;
+    border-bottom:1px solid var(--line);
+    background:var(--paper);
+    position:sticky; top:0; z-index:20;
+  }
+  .brand{ display:flex; flex-direction:column; gap:2px; }
+  .brand .word{
+    font-family:'Fraunces', serif; font-weight:560; font-size:20px; letter-spacing:0.2px;
+  }
+  .brand .sub{ font-size:12px; color:var(--slate); }
+  .btn{
+    font-family:'Inter', sans-serif; font-weight:600; font-size:14px;
+    padding:11px 20px; border-radius:3px; border:1px solid var(--ink);
+    background:var(--ink); color:var(--paper);
+    cursor:pointer; transition:background .15s ease, transform .1s ease;
+  }
+  .btn:hover{ background:#000; }
+  .btn:active{ transform:translateY(1px); }
+  .btn[disabled]{ opacity:0.55; cursor:progress; }
+  .btn.ghost{
+    background:transparent; color:var(--ink); border:1px solid var(--line);
+  }
+  .btn.ghost:hover{ border-color:var(--ink); background:transparent; }
+
+  .layout{
+    display:grid;
+    grid-template-columns: minmax(320px, 420px) 1fr;
+    gap:0;
+    align-items:start;
+  }
+  @media (max-width: 940px){
+    .layout{ grid-template-columns: 1fr; }
+  }
+
+  /* ---------- Form column ---------- */
+  .form-col{
+    padding:28px; border-right:1px solid var(--line);
+    max-height:calc(100vh - 65px); overflow-y:auto;
+  }
+  @media (max-width: 940px){ .form-col{ max-height:none; border-right:none; border-bottom:1px solid var(--line);} }
+
+  .section{ margin-bottom:30px; }
+  .section h2{
+    font-family:'Inter',sans-serif; font-size:13px; font-weight:600; color:var(--brass-deep);
+    margin:0 0 14px 0; padding-bottom:8px; border-bottom:1px solid var(--line);
+  }
+  .field{ margin-bottom:12px; }
+  .field label{
+    display:block; font-size:12px; color:var(--slate); margin-bottom:5px; font-weight:500;
+  }
+  .field input, .field textarea, .field select{
+    width:100%; font-family:'Inter',sans-serif; font-size:14px; color:var(--ink);
+    padding:9px 11px; border:1px solid var(--line); border-radius:3px;
+    background:var(--card); outline:none; transition:border-color .12s ease;
+  }
+  .field textarea{ resize:vertical; line-height:1.5; }
+  .field select{ cursor:pointer; }
+  .field input:focus, .field textarea:focus, .field select:focus{ border-color:var(--brass); }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  .item-row{
+    display:grid; grid-template-columns:1fr 100px 28px; gap:8px; align-items:center; margin-bottom:8px;
+  }
+  .item-row input{ padding:8px 10px; font-size:13px; }
+  .icon-btn{
+    width:28px; height:28px; border-radius:3px; border:1px solid var(--line); background:var(--card);
+    color:var(--slate); cursor:pointer; font-size:15px; line-height:1; display:flex; align-items:center; justify-content:center;
+  }
+  .icon-btn:hover{ border-color:var(--danger); color:var(--danger); }
+  .add-item{
+    font-size:13px; font-weight:600; color:var(--brass-deep); background:none; border:none;
+    cursor:pointer; padding:6px 0; display:inline-flex; align-items:center; gap:6px;
+  }
+  .add-item:hover{ text-decoration:underline; }
+
+  /* ---------- Preview column ---------- */
+  .preview-col{
+    padding:40px; display:flex; justify-content:center;
+    background:
+      radial-gradient(circle at 1px 1px, #00000009 1px, transparent 0) 0 0/16px 16px;
+  }
+  #page-outer{
+    animation: rise .5s ease both;
+  }
+  @keyframes rise{ from{ opacity:0; transform:translateY(10px);} to{ opacity:1; transform:translateY(0);} }
+
+  #invoice-page{
+    width:816px; min-height:1056px;
+    background:var(--card);
+    box-shadow:0 1px 3px rgba(0,0,0,.08), 0 12px 40px rgba(20,15,5,.10);
+    padding:64px 60px 56px 60px;
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+  }
+
+  .inv-header{ display:flex; justify-content:space-between; align-items:flex-start; gap:20px; }
+  .inv-word{
+    font-family:'Fraunces', serif; font-weight:650; font-size:42px; letter-spacing:0.2px; line-height:1;
+  }
+  .inv-tagline{ margin-top:8px; font-size:13px; color:var(--slate); }
+  .meta-stamp{
+    background:var(--brass-tint); padding:14px 20px; min-width:190px;
+    border-left:2px solid var(--brass);
+  }
+  .meta-row{ display:flex; justify-content:space-between; gap:16px; padding:3px 0; }
+  .meta-row + .meta-row{ margin-top:2px; }
+  .meta-label{ font-size:11.5px; color:var(--brass-deep); }
+  .meta-value{ font-size:12.5px; font-weight:600; color:var(--ink); }
+
+  .rule{ height:1px; background:var(--ink); opacity:0.9; margin:26px 0 28px 0; }
+
+  .parties{ display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:34px; }
+  .party-label{ font-size:12px; color:var(--slate); margin-bottom:6px; }
+  .party-name{ font-size:16px; font-weight:600; margin-bottom:4px; }
+  .party-line{ font-size:13px; color:var(--ink-soft); line-height:1.55; }
+
+  table.items{ width:100%; border-collapse:collapse; margin-bottom:2px; }
+  table.items thead th{
+    text-align:left; font-size:11.5px; font-weight:600; color:var(--slate);
+    border-bottom:1px solid var(--ink); padding:0 0 9px 0;
+  }
+  table.items thead th.amt{ text-align:right; }
+  table.items tbody td{
+    font-size:14px; padding:13px 0; border-bottom:1px solid var(--line); vertical-align:top;
+  }
+  table.items tbody td.amt{ text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  table.items tbody td.desc-empty{ color:var(--slate); font-style:italic; }
+
+  .total-row{ display:flex; justify-content:flex-end; align-items:baseline; gap:22px; padding:16px 0 0 0; border-top:2px solid var(--brass); margin-top:2px; }
+  .total-label{ font-size:14px; font-weight:600; color:var(--ink-soft); }
+  .total-value{ font-family:'Fraunces', serif; font-weight:650; font-size:26px; color:var(--brass-deep); font-variant-numeric:tabular-nums; }
+
+  .pay-section{ margin-top:42px; }
+  .pay-title{ font-size:12px; color:var(--slate); margin-bottom:12px; }
+  .pay-grid{ display:grid; grid-template-columns:1fr 1fr; column-gap:26px; }
+  .pay-item{ display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--line); font-size:13px; }
+  .pay-item .k{ color:var(--slate); }
+  .pay-item .v{ font-weight:600; }
+  .pay-note{
+    grid-column:1 / -1; font-size:11.5px; color:var(--slate); font-style:italic;
+    padding:7px 2px 2px 2px; text-align:right;
+  }
+  .pay-note b{ color:var(--brass-deep); font-style:normal; font-weight:600; }
+
+  .sign-section{ margin-top:52px; display:flex; justify-content:flex-end; }
+  .sign-block{ text-align:right; min-width:220px; }
+  .sign-name{ font-family:'Fraunces', serif; font-style:italic; font-weight:500; font-size:26px; margin-bottom:6px; }
+  .sign-rule{ border-top:1px solid var(--ink); margin-bottom:6px; }
+  .sign-caption{ font-size:11px; color:var(--slate); }
+
+  .footnote{ margin-top:40px; font-size:12px; color:var(--slate); font-style:italic; }
+
+  ::-webkit-scrollbar{ width:9px; }
+  ::-webkit-scrollbar-thumb{ background:#D8D2C2; border-radius:5px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="word">Invoice Studio</div>
+    <div class="sub">Fill in the details, then export a polished PDF</div>
+  </div>
+  <button class="btn" id="downloadBtn">Download PDF</button>
+</div>
+
+<div class="layout">
+  <!-- FORM -->
+  <div class="form-col">
+
+    <div class="section">
+      <h2>From</h2>
+      <div class="field"><label>Your name / business</label><input id="fromName" value="Michael Gazin"></div>
+      <div class="field"><label>Street address</label><input id="fromStreet" value="3302 Dolphin Cove #A"></div>
+      <div class="row2">
+        <div class="field"><label>City, State ZIP</label><input id="fromCityState" value="Austin, TX 78704"></div>
+        <div class="field"><label>Phone</label><input id="fromPhone" value="361.779.1200"></div>
+      </div>
+      <div class="field"><label>Email</label><input id="fromEmail" value="michaelgazin@gmail.com"></div>
+    </div>
+
+    <div class="section">
+      <h2>Bill to</h2>
+      <div class="field"><label>Client name</label><input id="toName" value="Breakthrough Creatives"></div>
+      <div class="field"><label>Additional info (optional)</label><textarea id="toNote" rows="3" placeholder="Address, account #, attn line, etc. — one item per line"></textarea></div>
+    </div>
+
+    <div class="section">
+      <h2>Invoice details</h2>
+      <div class="row2">
+        <div class="field"><label>Invoice number</label><input id="invNo" value="11"></div>
+        <div class="field"><label>Date</label><input id="invDate" type="date" value="2026-08-17"></div>
+      </div>
+      <div class="field"><label>Terms</label><input id="invTerms" value="Due upon receipt"></div>
+    </div>
+
+    <div class="section">
+      <h2>Line items</h2>
+      <div id="itemsWrap"></div>
+      <button class="add-item" id="addItemBtn">+ Add line item</button>
+    </div>
+
+    <div class="section">
+      <h2>Payment information</h2>
+      <div class="row2">
+        <div class="field"><label>Account name</label><input id="payAcctName" value="Michael Gazin"></div>
+        <div class="field"><label>Account no.</label><input id="payAcctNo" value="382558598"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Bank name</label><input id="payBankName" value="Chase Bank"></div>
+        <div class="field"><label>Routing no.</label><input id="payRouting" value="322271627"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Currency</label><input id="payCurrency" value="USD"></div>
+        <div class="field"><label>PayPal email</label><input id="payPaypal" value="michaelgazin@gmail.com"></div>
+      </div>
+      <div class="field">
+        <label>PayPal fee note</label>
+        <select id="paypalFeeOption">
+          <option value="none">Don't include</option>
+          <option value="3" selected>Include — 3% fee</option>
+          <option value="5">Include — 5% fee</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Signature</h2>
+      <div class="row2">
+        <div class="field"><label>Signed by</label><input id="signName" value="Michael Gazin"></div>
+        <div class="field"><label>Date signed</label><input id="signDate" type="date" value="2026-08-17"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PREVIEW -->
+  <div class="preview-col">
+    <div id="page-outer">
+      <div id="invoice-page">
+        <div class="inv-header">
+          <div>
+            <div class="inv-word">Invoice</div>
+            <div class="inv-tagline" id="pv-fromName">Michael Gazin</div>
+          </div>
+          <div class="meta-stamp">
+            <div class="meta-row"><span class="meta-label">Invoice no.</span><span class="meta-value" id="pv-invNo">11</span></div>
+            <div class="meta-row"><span class="meta-label">Date</span><span class="meta-value" id="pv-invDate">Aug 17, 2026</span></div>
+            <div class="meta-row"><span class="meta-label">Terms</span><span class="meta-value" id="pv-invTerms">Due upon receipt</span></div>
+          </div>
+        </div>
+
+        <div class="rule"></div>
+
+        <div class="parties">
+          <div>
+            <div class="party-label">From</div>
+            <div class="party-name" id="pv-fromName2">Michael Gazin</div>
+            <div class="party-line" id="pv-fromAddr">3302 Dolphin Cove #A<br>Austin, TX 78704</div>
+            <div class="party-line" id="pv-fromContact">michaelgazin@gmail.com &nbsp;·&nbsp; 361.779.1200</div>
+          </div>
+          <div>
+            <div class="party-label">Bill to</div>
+            <div class="party-name" id="pv-toName">Breakthrough Creatives</div>
+            <div class="party-line" id="pv-toNote"></div>
+          </div>
+        </div>
+
+        <table class="items">
+          <thead>
+            <tr><th>Description</th><th class="amt">Amount</th></tr>
+          </thead>
+          <tbody id="pv-itemsBody"></tbody>
+        </table>
+
+        <div class="total-row">
+          <span class="total-label">Total due</span>
+          <span class="total-value" id="pv-total">$0.00</span>
+        </div>
+
+        <div class="pay-section">
+          <div class="pay-title">Payment information</div>
+          <div class="pay-grid">
+            <div class="pay-item"><span class="k">Account name</span><span class="v" id="pv-acctName">Michael Gazin</span></div>
+            <div class="pay-item"><span class="k">Bank name</span><span class="v" id="pv-bankName">Chase Bank</span></div>
+            <div class="pay-item"><span class="k">Account no.</span><span class="v" id="pv-acctNo">382558598</span></div>
+            <div class="pay-item"><span class="k">Routing no.</span><span class="v" id="pv-routing">322271627</span></div>
+            <div class="pay-item"><span class="k">Currency</span><span class="v" id="pv-currency">USD</span></div>
+            <div class="pay-item"><span class="k">PayPal</span><span class="v" id="pv-paypal">michaelgazin@gmail.com</span></div>
+            <div class="pay-note" id="pv-paypalNote" style="display:none;"></div>
+          </div>
+        </div>
+
+        <div class="sign-section">
+          <div class="sign-block">
+            <div class="sign-name" id="pv-signName">Michael Gazin</div>
+            <div class="sign-rule"></div>
+            <div class="sign-caption">Authorized signature &nbsp;·&nbsp; <span id="pv-signDate">Aug 17, 2026</span></div>
+          </div>
+        </div>
+
+        <div class="footnote">Thank you for the business.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let items = [
+  { desc: "UGC Video — Voicenote Confession (BC052, couple)", amt: 350 }
+];
+
+function fmtMoney(n){
+  const v = isFinite(n) ? n : 0;
+  return '$' + v.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+function fmtDate(iso){
+  if(!iso) return '';
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(y, m-1, d);
+  return dt.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+
+function renderItemRows(){
+  const wrap = document.getElementById('itemsWrap');
+  wrap.innerHTML = '';
+  items.forEach((item, i) => {
+    const row = document.createElement('div');
+    row.className = 'item-row';
+    row.innerHTML = `
+      <input type="text" data-idx="${i}" data-field="desc" placeholder="Description" value="${escapeAttr(item.desc)}">
+      <input type="number" data-idx="${i}" data-field="amt" placeholder="0.00" step="0.01" value="${item.amt}">
+      <button class="icon-btn" data-remove="${i}" title="Remove">×</button>
+    `;
+    wrap.appendChild(row);
+  });
+  wrap.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const idx = +e.target.dataset.idx;
+      const field = e.target.dataset.field;
+      items[idx][field] = field === 'amt' ? parseFloat(e.target.value || 0) : e.target.value;
+      updatePreview();
+    });
+  });
+  wrap.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const idx = +e.target.dataset.remove;
+      items.splice(idx, 1);
+      renderItemRows();
+      updatePreview();
+    });
+  });
+}
+
+function escapeAttr(s){
+  return String(s).replace(/"/g,'&quot;');
+}
+function escapeHtml(s){
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function updatePreview(){
+  const val = id => document.getElementById(id).value;
+
+  document.getElementById('pv-fromName').textContent = val('fromName');
+  document.getElementById('pv-fromName2').textContent = val('fromName');
+  document.getElementById('pv-fromAddr').innerHTML = `${escapeHtml(val('fromStreet'))}<br>${escapeHtml(val('fromCityState'))}`;
+  document.getElementById('pv-fromContact').innerHTML = `${escapeHtml(val('fromEmail'))} &nbsp;·&nbsp; ${escapeHtml(val('fromPhone'))}`;
+
+  document.getElementById('pv-toName').textContent = val('toName');
+  const toNoteLines = val('toNote').split('\n').map(l => l.trim()).filter(Boolean);
+  document.getElementById('pv-toNote').innerHTML = toNoteLines.map(escapeHtml).join('<br>');
+
+  document.getElementById('pv-invNo').textContent = val('invNo');
+  document.getElementById('pv-invDate').textContent = fmtDate(val('invDate'));
+  document.getElementById('pv-invTerms').textContent = val('invTerms');
+
+  const body = document.getElementById('pv-itemsBody');
+  body.innerHTML = '';
+  let total = 0;
+  if(items.length === 0){
+    body.innerHTML = `<tr><td class="desc-empty">No line items yet</td><td class="amt">—</td></tr>`;
+  } else {
+    items.forEach(item => {
+      total += (parseFloat(item.amt) || 0);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtml(item.desc || '')}</td><td class="amt">${fmtMoney(item.amt || 0)}</td>`;
+      body.appendChild(tr);
+    });
+  }
+  const currency = val('payCurrency') || 'USD';
+  document.getElementById('pv-total').textContent = fmtMoney(total) + ' ' + currency;
+
+  const feeOption = val('paypalFeeOption');
+  const noteEl = document.getElementById('pv-paypalNote');
+  if(feeOption === 'none'){
+    noteEl.style.display = 'none';
+    noteEl.innerHTML = '';
+  } else {
+    const feePct = parseFloat(feeOption);
+    const paypalTotal = total / (1 - feePct / 100);
+    noteEl.style.display = 'block';
+    noteEl.innerHTML = `${feePct}% fee applies if paying via PayPal — total comes to <b>${fmtMoney(paypalTotal)} ${currency}</b>`;
+  }
+
+  document.getElementById('pv-acctName').textContent = val('payAcctName');
+  document.getElementById('pv-bankName').textContent = val('payBankName');
+  document.getElementById('pv-acctNo').textContent = val('payAcctNo');
+  document.getElementById('pv-routing').textContent = val('payRouting');
+  document.getElementById('pv-currency').textContent = val('payCurrency');
+  document.getElementById('pv-paypal').textContent = val('payPaypal');
+
+  document.getElementById('pv-signName').textContent = val('signName');
+  document.getElementById('pv-signDate').textContent = fmtDate(val('signDate'));
+}
+
+document.getElementById('addItemBtn').addEventListener('click', () => {
+  items.push({ desc: '', amt: 0 });
+  renderItemRows();
+  updatePreview();
+});
+
+document.querySelectorAll('.form-col input, .form-col textarea, .form-col select').forEach(inp => {
+  inp.addEventListener('input', updatePreview);
+  inp.addEventListener('change', updatePreview);
+});
+
+renderItemRows();
+updatePreview();
+
+document.getElementById('downloadBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('downloadBtn');
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Preparing…';
+
+  const node = document.getElementById('invoice-page');
+  try{
+    const canvas = await html2canvas(node, { scale: 2.5, useCORS: true, backgroundColor: '#ffffff' });
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+
+    const pxToMm = px => px * 25.4 / 96;
+    const wMm = pxToMm(node.offsetWidth);
+    const hMm = pxToMm(node.offsetHeight);
+
+    const pdf = new jsPDF({
+      orientation: wMm > hMm ? 'landscape' : 'portrait',
+      unit: 'mm',
+      format: [wMm, hMm]
+    });
+    pdf.addImage(imgData, 'PNG', 0, 0, wMm, hMm, undefined, 'FAST');
+
+    const invNo = document.getElementById('invNo').value || 'invoice';
+    const fromName = (document.getElementById('fromName').value || 'invoice').replace(/\s+/g,'_');
+    pdf.save(`Invoice_${fromName}_No${invNo}.pdf`);
+  } catch(err){
+    alert('Something went wrong generating the PDF. Please try again.');
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+});
+</script>
+
+</body>
+</html>
