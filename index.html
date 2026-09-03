@@ -393,10 +393,10 @@
             <div class="inv-word">Invoice</div>
             <div class="inv-tagline" id="pv-fromName">Michael Gazin</div>
           </div>
-          <div class="meta-stamp">
-            <div class="meta-row"><span class="meta-label">Invoice no.</span><span class="meta-value" id="pv-invNo">11</span></div>
-            <div class="meta-row"><span class="meta-label">Date</span><span class="meta-value" id="pv-invDate">Aug 17, 2026</span></div>
-            <div class="meta-row"><span class="meta-label">Terms</span><span class="meta-value" id="pv-invTerms">Due upon receipt</span></div>
+          <div class="meta-stamp" id="pv-metaStamp">
+            <div class="meta-row" id="pv-invNoRow"><span class="meta-label">Invoice no.</span><span class="meta-value" id="pv-invNo">11</span></div>
+            <div class="meta-row" id="pv-invDateRow"><span class="meta-label">Date</span><span class="meta-value" id="pv-invDate">Aug 17, 2026</span></div>
+            <div class="meta-row" id="pv-invTermsRow"><span class="meta-label">Terms</span><span class="meta-value" id="pv-invTerms">Due upon receipt</span></div>
           </div>
         </div>
 
@@ -696,9 +696,19 @@ function updatePreview(){
   const toNoteLines = val('toNote').split('\n').map(l => l.trim()).filter(Boolean);
   document.getElementById('pv-toNote').innerHTML = toNoteLines.map(escapeHtml).join('<br>');
 
-  document.getElementById('pv-invNo').textContent = val('invNo');
-  document.getElementById('pv-invDate').textContent = fmtDate(val('invDate'));
-  document.getElementById('pv-invTerms').textContent = val('invTerms');
+  const invNoVal = val('invNo').trim();
+  const invDateVal = val('invDate');
+  const invTermsVal = val('invTerms').trim();
+  const rowNo = document.getElementById('pv-invNoRow');
+  const rowDate = document.getElementById('pv-invDateRow');
+  const rowTerms = document.getElementById('pv-invTermsRow');
+  if(invNoVal){ rowNo.style.display = 'flex'; document.getElementById('pv-invNo').textContent = invNoVal; }
+  else { rowNo.style.display = 'none'; }
+  if(invDateVal){ rowDate.style.display = 'flex'; document.getElementById('pv-invDate').textContent = fmtDate(invDateVal); }
+  else { rowDate.style.display = 'none'; }
+  if(invTermsVal){ rowTerms.style.display = 'flex'; document.getElementById('pv-invTerms').textContent = invTermsVal; }
+  else { rowTerms.style.display = 'none'; }
+  document.getElementById('pv-metaStamp').style.display = (invNoVal || invDateVal || invTermsVal) ? 'block' : 'none';
 
   const body = document.getElementById('pv-itemsBody');
   body.innerHTML = '';
@@ -794,6 +804,7 @@ function applyProfile(p){
   document.getElementById('payRouting').value = p.pay_routing || '';
   document.getElementById('payCurrency').value = p.pay_currency || 'USD';
   document.getElementById('payPaypal').value = p.pay_paypal || '';
+  document.getElementById('paypalFeeOption').value = p.paypal_fee_option || 'none';
   document.getElementById('signName').value = (p.signature_name != null) ? p.signature_name : (p.from_name || '');
   state.signatureImage = p.signature_image || null;
   state.sigScale = p.signature_scale || 100;
@@ -854,6 +865,7 @@ document.getElementById('saveProfileBtn').addEventListener('click', async () => 
     from_email: val('fromEmail'), from_phone: val('fromPhone'),
     pay_acct_name: val('payAcctName'), pay_acct_no: val('payAcctNo'), pay_bank_name: val('payBankName'),
     pay_routing: val('payRouting'), pay_currency: val('payCurrency'), pay_paypal: val('payPaypal'),
+    paypal_fee_option: val('paypalFeeOption'),
     signature_image: state.signatureImage,
     signature_scale: state.sigScale,
     signature_spacing: state.sigSpacing,
