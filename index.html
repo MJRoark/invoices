@@ -90,6 +90,19 @@
     font-family:'Inter',sans-serif; font-size:13px; font-weight:600; color:var(--brass-deep);
     margin:0 0 14px 0; padding-bottom:8px; border-bottom:1px solid var(--line);
   }
+  details.collapsible summary{
+    font-family:'Inter',sans-serif; font-size:13px; font-weight:600; color:var(--brass-deep);
+    margin:0 0 14px 0; padding-bottom:8px; border-bottom:1px solid var(--line);
+    cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between;
+  }
+  details.collapsible summary::-webkit-details-marker{ display:none; }
+  details.collapsible summary::after{
+    content:'+'; font-size:15px; color:var(--slate); font-weight:400;
+  }
+  details.collapsible[open] summary::after{ content:'\2212'; }
+  details.collapsible summary:hover{ color:var(--ink); }
+  details.collapsible[open] summary{ margin-bottom:14px; }
+  details.collapsible .field:first-of-type{ margin-top:2px; }
   .field{ margin-bottom:12px; }
   .field label{
     display:block; font-size:12px; color:var(--slate); margin-bottom:5px; font-weight:500;
@@ -280,8 +293,8 @@
       <button class="add-item" id="saveProfileBtn">Save current info to this profile</button>
     </div>
 
-    <div class="section">
-      <h2>From</h2>
+    <details class="section collapsible" id="detailsFrom">
+      <summary>From</summary>
       <div class="field"><label>Your name / business</label><input id="fromName" value="Michael Gazin"></div>
       <div class="field"><label>Street address</label><input id="fromStreet" value="3302 Dolphin Cove #A"></div>
       <div class="row2">
@@ -289,7 +302,7 @@
         <div class="field"><label>Phone</label><input id="fromPhone" value="361.779.1200"></div>
       </div>
       <div class="field"><label>Email</label><input id="fromEmail" value="michaelgazin@gmail.com"></div>
-    </div>
+    </details>
 
     <div class="section">
       <h2>Bill to</h2>
@@ -317,8 +330,8 @@
       <button class="add-item" id="addItemBtn">+ Add line item</button>
     </div>
 
-    <div class="section">
-      <h2>Payment information</h2>
+    <details class="section collapsible" id="detailsPayment">
+      <summary>Payment information</summary>
       <div class="row2">
         <div class="field"><label>Account name</label><input id="payAcctName" value="Michael Gazin"></div>
         <div class="field"><label>Account no.</label><input id="payAcctNo" value="382558598"></div>
@@ -339,10 +352,10 @@
           <option value="5">Include — 5% fee</option>
         </select>
       </div>
-    </div>
+    </details>
 
-    <div class="section">
-      <h2>Signature</h2>
+    <details class="section collapsible" id="detailsSignature">
+      <summary>Signature</summary>
       <div class="row2">
         <div class="field"><label>Signed by</label><input id="signName" value="Michael Gazin"></div>
         <div class="field"><label>Date signed</label><input id="signDate" type="date" value="2026-08-17"></div>
@@ -367,7 +380,7 @@
           <span class="slider-val" id="sigSpacingVal">6px</span>
         </div>
       </div>
-    </div>
+    </details>
 
   </div>
 
@@ -732,6 +745,16 @@ document.querySelectorAll('.form-col input, .form-col textarea, .form-col select
 });
 
 /* =========================================================
+   Collapsible sections (From / Payment / Signature)
+   ========================================================= */
+function setSectionsOpen(open){
+  ['detailsFrom', 'detailsPayment', 'detailsSignature'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.open = open;
+  });
+}
+
+/* =========================================================
    Profiles
    ========================================================= */
 function populateProfileSelect(list){
@@ -781,11 +804,12 @@ function applyProfile(p){
 }
 
 async function loadProfiles(){
-  if(!supa){ populateProfileSelect([]); return; }
+  if(!supa){ populateProfileSelect([]); setSectionsOpen(true); return; }
   const { data, error } = await supa.from('profiles').select('*').order('display_name');
-  if(error){ console.error(error); return; }
+  if(error){ console.error(error); setSectionsOpen(true); return; }
   profilesCache = data || [];
   populateProfileSelect(profilesCache);
+  if(profilesCache.length === 0) setSectionsOpen(true);
 }
 
 document.getElementById('profileSelect').addEventListener('change', async (e) => {
@@ -803,11 +827,15 @@ document.getElementById('profileSelect').addEventListener('change', async (e) =>
     // Deliberately NOT calling applyProfile() here — the current form values
     // stay as-is so you only need to tweak the name/signature, then hit
     // "Save current info to this profile" to persist them to the new profile.
+    setSectionsOpen(true);
     showToast('New profile created — adjust name/signature, then "Save current info to this profile"');
     return;
   }
   currentProfile = profilesCache.find(p => p.id === value) || null;
-  if(currentProfile) applyProfile(currentProfile);
+  if(currentProfile){
+    applyProfile(currentProfile);
+    setSectionsOpen(false);
+  }
 });
 
 document.getElementById('saveProfileBtn').addEventListener('click', async () => {
@@ -985,6 +1013,7 @@ function loadInvoiceIntoForm(row){
       currentProfile = p;
       document.getElementById('profileSelect').value = p.id;
       applyProfile(p);
+      setSectionsOpen(false);
     }
   }
 
