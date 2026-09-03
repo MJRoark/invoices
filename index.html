@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,450;0,9..144,560;0,9..144,650;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
     --ink:#1B1D22;
@@ -21,6 +22,7 @@
     --brass-deep:#7C5F2C;
     --brass-tint:#F1E9D6;
     --danger:#B4483F;
+    --good:#3F8F5F;
   }
   *{ box-sizing:border-box; }
   html,body{ margin:0; padding:0; }
@@ -34,7 +36,7 @@
   /* ---------- App shell ---------- */
   .topbar{
     display:flex; align-items:center; justify-content:space-between;
-    padding:18px 28px;
+    padding:16px 28px;
     border-bottom:1px solid var(--line);
     background:var(--paper);
     position:sticky; top:0; z-index:20;
@@ -44,6 +46,9 @@
     font-family:'Fraunces', serif; font-weight:560; font-size:20px; letter-spacing:0.2px;
   }
   .brand .sub{ font-size:12px; color:var(--slate); }
+  .topbar-actions{ display:flex; align-items:center; gap:10px; }
+  .conn-dot{ width:8px; height:8px; border-radius:50%; background:#C9C2AE; display:inline-block; margin-right:4px; }
+  .conn-dot.on{ background:var(--good); }
   .btn{
     font-family:'Inter', sans-serif; font-weight:600; font-size:14px;
     padding:11px 20px; border-radius:3px; border:1px solid var(--ink);
@@ -57,6 +62,11 @@
     background:transparent; color:var(--ink); border:1px solid var(--line);
   }
   .btn.ghost:hover{ border-color:var(--ink); background:transparent; }
+
+  .banner{
+    background:var(--brass-tint); color:var(--brass-deep); font-size:13px;
+    padding:10px 28px; border-bottom:1px solid var(--line);
+  }
 
   .layout{
     display:grid;
@@ -100,7 +110,7 @@
   .item-row input{ padding:8px 10px; font-size:13px; }
   .icon-btn{
     width:28px; height:28px; border-radius:3px; border:1px solid var(--line); background:var(--card);
-    color:var(--slate); cursor:pointer; font-size:15px; line-height:1; display:flex; align-items:center; justify-content:center;
+    color:var(--slate); cursor:pointer; font-size:15px; line-height:1; display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
   .icon-btn:hover{ border-color:var(--danger); color:var(--danger); }
   .add-item{
@@ -109,15 +119,16 @@
   }
   .add-item:hover{ text-decoration:underline; }
 
+  .sig-preview-wrap{ display:none; align-items:center; gap:10px; margin-top:8px; }
+  .sig-preview-wrap img{ max-height:48px; max-width:200px; border:1px solid var(--line); border-radius:3px; background:#fff; padding:4px; }
+
   /* ---------- Preview column ---------- */
   .preview-col{
     padding:40px; display:flex; justify-content:center;
     background:
       radial-gradient(circle at 1px 1px, #00000009 1px, transparent 0) 0 0/16px 16px;
   }
-  #page-outer{
-    animation: rise .5s ease both;
-  }
+  #page-outer{ animation: rise .5s ease both; }
   @keyframes rise{ from{ opacity:0; transform:translateY(10px);} to{ opacity:1; transform:translateY(0);} }
 
   #invoice-page{
@@ -180,11 +191,44 @@
 
   .sign-section{ margin-top:52px; display:flex; justify-content:flex-end; }
   .sign-block{ text-align:right; min-width:220px; }
+  .sign-image-wrap{ display:none; margin-bottom:6px; }
+  .sign-image-wrap img{ max-height:56px; max-width:220px; }
   .sign-name{ font-family:'Fraunces', serif; font-style:italic; font-weight:500; font-size:26px; margin-bottom:6px; }
   .sign-rule{ border-top:1px solid var(--ink); margin-bottom:6px; }
   .sign-caption{ font-size:11px; color:var(--slate); }
 
   .footnote{ margin-top:40px; font-size:12px; color:var(--slate); font-style:italic; }
+
+  /* ---------- History modal ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(20,17,10,.35); z-index:50;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .modal{
+    background:var(--card); width:540px; max-width:92vw; max-height:78vh;
+    border-radius:4px; box-shadow:0 20px 60px rgba(0,0,0,.25); display:flex; flex-direction:column; overflow:hidden;
+  }
+  .modal-head{
+    display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line);
+  }
+  .modal-head h3{ margin:0; font-family:'Fraunces',serif; font-weight:560; font-size:18px; }
+  .history-list{ overflow-y:auto; padding:8px 12px; }
+  .hist-row{
+    display:flex; justify-content:space-between; align-items:center; padding:13px 10px; border-bottom:1px solid var(--line);
+    cursor:pointer;
+  }
+  .hist-row:hover{ background:var(--paper); }
+  .hist-title{ font-size:14px; font-weight:600; }
+  .hist-sub{ font-size:12px; color:var(--slate); margin-top:2px; }
+  .hist-amt{ font-family:'Fraunces',serif; font-weight:600; font-size:15px; color:var(--brass-deep); white-space:nowrap; padding-left:14px; }
+  .hist-empty{ padding:34px 10px; text-align:center; color:var(--slate); font-size:13px; }
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(10px);
+    background:var(--ink); color:var(--paper); padding:11px 20px; border-radius:4px; font-size:13px;
+    opacity:0; transition:opacity .2s ease, transform .2s ease; z-index:60; display:none;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
   ::-webkit-scrollbar{ width:9px; }
   ::-webkit-scrollbar-thumb{ background:#D8D2C2; border-radius:5px; }
@@ -197,12 +241,31 @@
     <div class="word">Invoice Studio</div>
     <div class="sub">Fill in the details, then export a polished PDF</div>
   </div>
-  <button class="btn" id="downloadBtn">Download PDF</button>
+  <div class="topbar-actions">
+    <span id="connStatus" class="conn-dot"></span>
+    <button class="btn ghost" id="newInvoiceBtn">New</button>
+    <button class="btn ghost" id="historyBtn">History</button>
+    <button class="btn ghost" id="saveInvoiceBtn">Save invoice</button>
+    <button class="btn" id="downloadBtn">Download PDF</button>
+  </div>
+</div>
+
+<div class="banner" id="configBanner" style="display:none;">
+  Not connected to Supabase yet — add your project URL and anon key near the top of the &lt;script&gt; block (look for <code>SUPABASE_URL</code> / <code>SUPABASE_ANON_KEY</code>) to enable saved clients, profiles, and invoice history. PDF export still works without it.
 </div>
 
 <div class="layout">
   <!-- FORM -->
   <div class="form-col">
+
+    <div class="section">
+      <h2>Your profile</h2>
+      <div class="field">
+        <label>Signing as</label>
+        <select id="profileSelect"><option value="">Not connected</option></select>
+      </div>
+      <button class="add-item" id="saveProfileBtn">Save current info to this profile</button>
+    </div>
 
     <div class="section">
       <h2>From</h2>
@@ -217,7 +280,11 @@
 
     <div class="section">
       <h2>Bill to</h2>
-      <div class="field"><label>Client name</label><input id="toName" value="Breakthrough Creatives"></div>
+      <div class="field">
+        <label>Client name</label>
+        <input id="toName" list="clientList" value="Breakthrough Creatives" autocomplete="off">
+        <datalist id="clientList"></datalist>
+      </div>
       <div class="field"><label>Additional info (optional)</label><textarea id="toNote" rows="3" placeholder="Address, account #, attn line, etc. — one item per line"></textarea></div>
     </div>
 
@@ -265,6 +332,14 @@
       <div class="row2">
         <div class="field"><label>Signed by</label><input id="signName" value="Michael Gazin"></div>
         <div class="field"><label>Date signed</label><input id="signDate" type="date" value="2026-08-17"></div>
+      </div>
+      <div class="field">
+        <label>Signature image (optional)</label>
+        <input type="file" id="sigFile" accept="image/*">
+      </div>
+      <div class="sig-preview-wrap" id="sigPreviewWrap">
+        <img id="sigPreviewImg" alt="Signature preview">
+        <button class="icon-btn" id="sigRemoveBtn" title="Remove">×</button>
       </div>
     </div>
 
@@ -329,6 +404,7 @@
 
         <div class="sign-section">
           <div class="sign-block">
+            <div class="sign-image-wrap" id="pv-signImageWrap"><img id="pv-signImage" alt="Signature"></div>
             <div class="sign-name" id="pv-signName">Michael Gazin</div>
             <div class="sign-rule"></div>
             <div class="sign-caption">Authorized signature &nbsp;·&nbsp; <span id="pv-signDate">Aug 17, 2026</span></div>
@@ -341,11 +417,58 @@
   </div>
 </div>
 
+<!-- History modal -->
+<div id="historyOverlay" class="overlay" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Invoice history</h3>
+      <button class="icon-btn" id="historyCloseBtn">×</button>
+    </div>
+    <div id="historyList" class="history-list"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
 <script>
+/* =========================================================
+   Supabase connection
+   Fill these in with your project's URL + anon public key
+   (Supabase Dashboard → Settings → API), then reload the page.
+   ========================================================= */
+const SUPABASE_URL = "https://odyghekzqnfqlkoettbs.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_Lz6B4yOQcHhAn-eT7h_XDw_pTXdUd51";
+
+function isConfigured(){
+  return SUPABASE_URL && !SUPABASE_URL.includes('YOUR_') &&
+         SUPABASE_ANON_KEY && !SUPABASE_ANON_KEY.includes('YOUR_');
+}
+let supa = null;
+if(isConfigured() && window.supabase){
+  try{ supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
+  catch(e){ console.error('Supabase init failed', e); }
+}
+
+/* =========================================================
+   State
+   ========================================================= */
 let items = [
   { desc: "UGC Video — Voicenote Confession (BC052, couple)", amt: 350 }
 ];
+let clientsCache = [];
+let profilesCache = [];
+let currentProfile = null;
+const state = {
+  clientId: null,
+  invoiceId: null,
+  signatureImage: null
+};
 
+function val(id){ return document.getElementById(id).value; }
+
+/* =========================================================
+   Formatting helpers
+   ========================================================= */
 function fmtMoney(n){
   const v = isFinite(n) ? n : 0;
   return '$' + v.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
@@ -356,7 +479,37 @@ function fmtDate(iso){
   const dt = new Date(y, m-1, d);
   return dt.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 }
+function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
+function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+/* =========================================================
+   Toast
+   ========================================================= */
+let toastTimer = null;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  requestAnimationFrame(() => t.classList.add('show'));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    t.classList.remove('show');
+    setTimeout(() => { t.style.display = 'none'; }, 250);
+  }, 2200);
+}
+
+/* =========================================================
+   Connection status
+   ========================================================= */
+function updateConnStatus(){
+  const dot = document.getElementById('connStatus');
+  if(supa){ dot.classList.add('on'); dot.title = 'Connected to Supabase'; }
+  else { dot.classList.remove('on'); dot.title = 'Not connected'; }
+}
+
+/* =========================================================
+   Line items
+   ========================================================= */
 function renderItemRows(){
   const wrap = document.getElementById('itemsWrap');
   wrap.innerHTML = '';
@@ -387,18 +540,82 @@ function renderItemRows(){
     });
   });
 }
+document.getElementById('addItemBtn').addEventListener('click', () => {
+  items.push({ desc: '', amt: 0 });
+  renderItemRows();
+  updatePreview();
+});
 
-function escapeAttr(s){
-  return String(s).replace(/"/g,'&quot;');
+/* =========================================================
+   Signature upload
+   ========================================================= */
+function setSignaturePreview(dataUrl){
+  const wrap = document.getElementById('sigPreviewWrap');
+  if(dataUrl){
+    document.getElementById('sigPreviewImg').src = dataUrl;
+    wrap.style.display = 'flex';
+  } else {
+    wrap.style.display = 'none';
+  }
 }
-function escapeHtml(s){
-  return String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+document.getElementById('sigFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 480;
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/png');
+      state.signatureImage = dataUrl;
+      setSignaturePreview(dataUrl);
+      updatePreview();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+document.getElementById('sigRemoveBtn').addEventListener('click', () => {
+  state.signatureImage = null;
+  document.getElementById('sigFile').value = '';
+  setSignaturePreview(null);
+  updatePreview();
+});
+
+/* =========================================================
+   Preview rendering
+   ========================================================= */
+function updateSignatureBlock(){
+  const imgWrap = document.getElementById('pv-signImageWrap');
+  const nameEl = document.getElementById('pv-signName');
+  const signedName = val('signName');
+  if(state.signatureImage){
+    imgWrap.style.display = 'block';
+    document.getElementById('pv-signImage').src = state.signatureImage;
+    nameEl.textContent = signedName;
+    nameEl.style.fontFamily = "'Inter', sans-serif";
+    nameEl.style.fontStyle = 'normal';
+    nameEl.style.fontWeight = '600';
+    nameEl.style.fontSize = '13px';
+    nameEl.style.color = 'var(--slate)';
+  } else {
+    imgWrap.style.display = 'none';
+    nameEl.textContent = signedName;
+    nameEl.style.fontFamily = "'Fraunces', serif";
+    nameEl.style.fontStyle = 'italic';
+    nameEl.style.fontWeight = '500';
+    nameEl.style.fontSize = '26px';
+    nameEl.style.color = 'var(--ink)';
+  }
 }
 
 function updatePreview(){
-  const val = id => document.getElementById(id).value;
-
   document.getElementById('pv-fromName').textContent = val('fromName');
   document.getElementById('pv-fromName2').textContent = val('fromName');
   document.getElementById('pv-fromAddr').innerHTML = `${escapeHtml(val('fromStreet'))}<br>${escapeHtml(val('fromCityState'))}`;
@@ -444,27 +661,285 @@ function updatePreview(){
   document.getElementById('pv-bankName').textContent = val('payBankName');
   document.getElementById('pv-acctNo').textContent = val('payAcctNo');
   document.getElementById('pv-routing').textContent = val('payRouting');
-  document.getElementById('pv-currency').textContent = val('payCurrency');
+  document.getElementById('pv-currency').textContent = currency;
   document.getElementById('pv-paypal').textContent = val('payPaypal');
 
-  document.getElementById('pv-signName').textContent = val('signName');
   document.getElementById('pv-signDate').textContent = fmtDate(val('signDate'));
+  updateSignatureBlock();
 }
-
-document.getElementById('addItemBtn').addEventListener('click', () => {
-  items.push({ desc: '', amt: 0 });
-  renderItemRows();
-  updatePreview();
-});
 
 document.querySelectorAll('.form-col input, .form-col textarea, .form-col select').forEach(inp => {
   inp.addEventListener('input', updatePreview);
   inp.addEventListener('change', updatePreview);
 });
 
-renderItemRows();
-updatePreview();
+/* =========================================================
+   Profiles
+   ========================================================= */
+function populateProfileSelect(list){
+  const sel = document.getElementById('profileSelect');
+  sel.innerHTML = '';
+  if(!supa){
+    const opt = document.createElement('option');
+    opt.value = ''; opt.textContent = 'Not connected';
+    sel.appendChild(opt);
+    return;
+  }
+  if(list.length === 0){
+    const opt = document.createElement('option');
+    opt.value = ''; opt.textContent = 'No profiles yet';
+    sel.appendChild(opt);
+  }
+  list.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.display_name;
+    sel.appendChild(opt);
+  });
+  const optNew = document.createElement('option');
+  optNew.value = '__new__'; optNew.textContent = '+ New profile…';
+  sel.appendChild(optNew);
+}
 
+function applyProfile(p){
+  if(!p) return;
+  document.getElementById('fromName').value = p.from_name || '';
+  document.getElementById('fromStreet').value = p.from_street || '';
+  document.getElementById('fromCityState').value = p.from_city_state || '';
+  document.getElementById('fromEmail').value = p.from_email || '';
+  document.getElementById('fromPhone').value = p.from_phone || '';
+  document.getElementById('payAcctName').value = p.pay_acct_name || '';
+  document.getElementById('payAcctNo').value = p.pay_acct_no || '';
+  document.getElementById('payBankName').value = p.pay_bank_name || '';
+  document.getElementById('payRouting').value = p.pay_routing || '';
+  document.getElementById('payCurrency').value = p.pay_currency || 'USD';
+  document.getElementById('payPaypal').value = p.pay_paypal || '';
+  document.getElementById('signName').value = p.from_name || '';
+  state.signatureImage = p.signature_image || null;
+  setSignaturePreview(state.signatureImage);
+  updatePreview();
+}
+
+async function loadProfiles(){
+  if(!supa){ populateProfileSelect([]); return; }
+  const { data, error } = await supa.from('profiles').select('*').order('display_name');
+  if(error){ console.error(error); return; }
+  profilesCache = data || [];
+  populateProfileSelect(profilesCache);
+}
+
+document.getElementById('profileSelect').addEventListener('change', async (e) => {
+  const value = e.target.value;
+  if(value === '__new__'){
+    const name = prompt('Name for this profile (e.g. "Michael" or "Alex"):');
+    if(!name){ e.target.value = currentProfile ? currentProfile.id : ''; return; }
+    if(!supa){ alert('Connect Supabase first.'); e.target.value = ''; return; }
+    const { data, error } = await supa.from('profiles').insert({ display_name: name }).select().single();
+    if(error){ alert('Could not create profile: ' + error.message); return; }
+    profilesCache.push(data);
+    populateProfileSelect(profilesCache);
+    e.target.value = data.id;
+    currentProfile = data;
+    applyProfile(data);
+    showToast('Profile created — fill in details, then "Save current info to this profile"');
+    return;
+  }
+  currentProfile = profilesCache.find(p => p.id === value) || null;
+  if(currentProfile) applyProfile(currentProfile);
+});
+
+document.getElementById('saveProfileBtn').addEventListener('click', async () => {
+  if(!supa){ alert('Connect Supabase first — add your project URL and anon key near the top of the script.'); return; }
+  if(!currentProfile){ alert('Select or create a profile first.'); return; }
+  const payload = {
+    from_name: val('fromName'), from_street: val('fromStreet'), from_city_state: val('fromCityState'),
+    from_email: val('fromEmail'), from_phone: val('fromPhone'),
+    pay_acct_name: val('payAcctName'), pay_acct_no: val('payAcctNo'), pay_bank_name: val('payBankName'),
+    pay_routing: val('payRouting'), pay_currency: val('payCurrency'), pay_paypal: val('payPaypal'),
+    signature_image: state.signatureImage
+  };
+  const { data, error } = await supa.from('profiles').update(payload).eq('id', currentProfile.id).select().single();
+  if(error){ alert('Could not save profile: ' + error.message); return; }
+  currentProfile = data;
+  const idx = profilesCache.findIndex(p => p.id === data.id);
+  if(idx >= 0) profilesCache[idx] = data;
+  showToast('Profile saved');
+});
+
+/* =========================================================
+   Clients
+   ========================================================= */
+function renderClientList(){
+  const dl = document.getElementById('clientList');
+  dl.innerHTML = '';
+  clientsCache.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.name;
+    dl.appendChild(opt);
+  });
+}
+async function loadClients(){
+  if(!supa){ clientsCache = []; renderClientList(); return; }
+  const { data, error } = await supa.from('clients').select('*').order('name');
+  if(error){ console.error(error); return; }
+  clientsCache = data || [];
+  renderClientList();
+}
+document.getElementById('toName').addEventListener('input', (e) => {
+  const match = clientsCache.find(c => c.name.toLowerCase() === e.target.value.trim().toLowerCase());
+  if(match){
+    state.clientId = match.id;
+    document.getElementById('toNote').value = match.note || '';
+    updatePreview();
+  } else {
+    state.clientId = null;
+  }
+});
+async function upsertClient(name, note){
+  if(!supa) return null;
+  const trimmed = (name || '').trim();
+  if(!trimmed) return null;
+  const { data, error } = await supa.from('clients')
+    .upsert({ name: trimmed, note: note || null }, { onConflict: 'name' })
+    .select().single();
+  if(error){ console.error(error); alert('Could not save client: ' + error.message); return null; }
+  return data;
+}
+
+/* =========================================================
+   Save invoice
+   ========================================================= */
+document.getElementById('saveInvoiceBtn').addEventListener('click', async () => {
+  if(!supa){ alert('Connect Supabase first — add your project URL and anon key near the top of the script.'); return; }
+  const btn = document.getElementById('saveInvoiceBtn');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    const client = await upsertClient(val('toName'), val('toNote'));
+    if(client){
+      state.clientId = client.id;
+      const idx = clientsCache.findIndex(c => c.id === client.id);
+      if(idx >= 0) clientsCache[idx] = client; else clientsCache.push(client);
+      renderClientList();
+    }
+    let total = 0;
+    items.forEach(it => total += (parseFloat(it.amt) || 0));
+    const payload = {
+      invoice_no: val('invNo'),
+      invoice_date: val('invDate') || null,
+      terms: val('invTerms'),
+      profile_id: currentProfile ? currentProfile.id : null,
+      client_id: state.clientId,
+      items: items,
+      currency: val('payCurrency'),
+      paypal_fee_option: val('paypalFeeOption'),
+      total: total,
+      sign_name: val('signName'),
+      sign_date: val('signDate') || null
+    };
+    let result;
+    if(state.invoiceId){
+      result = await supa.from('invoices').update(payload).eq('id', state.invoiceId).select().single();
+    } else {
+      result = await supa.from('invoices').insert(payload).select().single();
+    }
+    if(result.error) throw result.error;
+    state.invoiceId = result.data.id;
+    showToast('Invoice saved');
+  } catch(err){
+    alert('Could not save invoice: ' + err.message);
+    console.error(err);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+});
+
+/* =========================================================
+   History
+   ========================================================= */
+async function openHistory(){
+  document.getElementById('historyOverlay').style.display = 'flex';
+  const listEl = document.getElementById('historyList');
+  listEl.innerHTML = '<div class="hist-empty">Loading…</div>';
+  if(!supa){ listEl.innerHTML = '<div class="hist-empty">Connect Supabase to see saved invoices.</div>'; return; }
+  const { data, error } = await supa.from('invoices')
+    .select('*, clients(name, note), profiles(display_name)')
+    .order('created_at', { ascending:false })
+    .limit(100);
+  if(error){ listEl.innerHTML = '<div class="hist-empty">Could not load history.</div>'; console.error(error); return; }
+  if(!data || data.length === 0){ listEl.innerHTML = '<div class="hist-empty">No saved invoices yet.</div>'; return; }
+  listEl.innerHTML = '';
+  data.forEach(row => {
+    const div = document.createElement('div');
+    div.className = 'hist-row';
+    const clientName = row.clients ? row.clients.name : '—';
+    const profName = row.profiles ? row.profiles.display_name : '—';
+    div.innerHTML = `
+      <div class="hist-main">
+        <div class="hist-title">#${escapeHtml(row.invoice_no || '—')} · ${escapeHtml(clientName)}</div>
+        <div class="hist-sub">${escapeHtml(row.invoice_date || '')} · ${escapeHtml(profName)}</div>
+      </div>
+      <div class="hist-amt">${fmtMoney(row.total || 0)}</div>
+    `;
+    div.addEventListener('click', () => loadInvoiceIntoForm(row));
+    listEl.appendChild(div);
+  });
+}
+
+function loadInvoiceIntoForm(row){
+  state.invoiceId = row.id;
+  state.clientId = row.client_id;
+
+  if(row.profile_id){
+    const p = profilesCache.find(p => p.id === row.profile_id);
+    if(p){
+      currentProfile = p;
+      document.getElementById('profileSelect').value = p.id;
+      applyProfile(p);
+    }
+  }
+
+  document.getElementById('toName').value = row.clients ? row.clients.name : '';
+  document.getElementById('toNote').value = row.clients ? (row.clients.note || '') : '';
+  document.getElementById('invNo').value = row.invoice_no || '';
+  document.getElementById('invDate').value = row.invoice_date || '';
+  document.getElementById('invTerms').value = row.terms || '';
+  document.getElementById('payCurrency').value = row.currency || 'USD';
+  document.getElementById('paypalFeeOption').value = row.paypal_fee_option || 'none';
+  document.getElementById('signName').value = row.sign_name || '';
+  document.getElementById('signDate').value = row.sign_date || '';
+
+  items = Array.isArray(row.items) && row.items.length
+    ? row.items.map(it => ({ desc: it.desc || '', amt: parseFloat(it.amt) || 0 }))
+    : [{ desc:'', amt:0 }];
+  renderItemRows();
+  updatePreview();
+
+  document.getElementById('historyOverlay').style.display = 'none';
+  showToast('Loaded invoice #' + (row.invoice_no || ''));
+}
+
+document.getElementById('historyBtn').addEventListener('click', openHistory);
+document.getElementById('historyCloseBtn').addEventListener('click', () => {
+  document.getElementById('historyOverlay').style.display = 'none';
+});
+document.getElementById('historyOverlay').addEventListener('click', (e) => {
+  if(e.target.id === 'historyOverlay') document.getElementById('historyOverlay').style.display = 'none';
+});
+
+document.getElementById('newInvoiceBtn').addEventListener('click', () => {
+  state.invoiceId = null;
+  state.clientId = null;
+  document.getElementById('toName').value = '';
+  document.getElementById('toNote').value = '';
+  items = [{ desc:'', amt:0 }];
+  renderItemRows();
+  updatePreview();
+  showToast('Started a new invoice');
+});
+
+/* =========================================================
+   PDF export
+   ========================================================= */
 document.getElementById('downloadBtn').addEventListener('click', async () => {
   const btn = document.getElementById('downloadBtn');
   const original = btn.textContent;
@@ -499,6 +974,18 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
     btn.textContent = original;
   }
 });
+
+/* =========================================================
+   Init
+   ========================================================= */
+renderItemRows();
+updatePreview();
+updateConnStatus();
+if(!isConfigured()){
+  document.getElementById('configBanner').style.display = 'block';
+}
+loadProfiles();
+loadClients();
 </script>
 
 </body>
