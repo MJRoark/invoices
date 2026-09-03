@@ -794,7 +794,7 @@ function applyProfile(p){
   document.getElementById('payRouting').value = p.pay_routing || '';
   document.getElementById('payCurrency').value = p.pay_currency || 'USD';
   document.getElementById('payPaypal').value = p.pay_paypal || '';
-  document.getElementById('signName').value = p.from_name || '';
+  document.getElementById('signName').value = (p.signature_name != null) ? p.signature_name : (p.from_name || '');
   state.signatureImage = p.signature_image || null;
   state.sigScale = p.signature_scale || 100;
   state.sigSpacing = (p.signature_spacing != null) ? p.signature_spacing : 6;
@@ -809,7 +809,15 @@ async function loadProfiles(){
   if(error){ console.error(error); setSectionsOpen(true); return; }
   profilesCache = data || [];
   populateProfileSelect(profilesCache);
-  if(profilesCache.length === 0) setSectionsOpen(true);
+  if(profilesCache.length === 0){
+    setSectionsOpen(true);
+  } else {
+    const sel = document.getElementById('profileSelect');
+    sel.value = profilesCache[0].id;
+    currentProfile = profilesCache[0];
+    applyProfile(currentProfile);
+    setSectionsOpen(false);
+  }
 }
 
 document.getElementById('profileSelect').addEventListener('change', async (e) => {
@@ -848,7 +856,8 @@ document.getElementById('saveProfileBtn').addEventListener('click', async () => 
     pay_routing: val('payRouting'), pay_currency: val('payCurrency'), pay_paypal: val('payPaypal'),
     signature_image: state.signatureImage,
     signature_scale: state.sigScale,
-    signature_spacing: state.sigSpacing
+    signature_spacing: state.sigSpacing,
+    signature_name: val('signName')
   };
   const { data, error } = await supa.from('profiles').update(payload).eq('id', currentProfile.id).select().single();
   if(error){ alert('Could not save profile: ' + error.message); return; }
