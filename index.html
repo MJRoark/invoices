@@ -121,6 +121,11 @@
 
   .sig-preview-wrap{ display:none; align-items:center; gap:10px; margin-top:8px; }
   .sig-preview-wrap img{ max-height:48px; max-width:200px; border:1px solid var(--line); border-radius:3px; background:#fff; padding:4px; }
+  .sig-sliders{ display:none; margin-top:14px; }
+  .sig-sliders .slider-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .sig-sliders .slider-row label{ font-size:12px; color:var(--slate); width:82px; flex-shrink:0; margin-bottom:0; }
+  .sig-sliders input[type=range]{ flex:1; accent-color:var(--brass); }
+  .sig-sliders .slider-val{ font-size:12px; color:var(--ink-soft); width:38px; text-align:right; flex-shrink:0; }
 
   /* ---------- Preview column ---------- */
   .preview-col{
@@ -191,8 +196,8 @@
 
   .sign-section{ margin-top:52px; display:flex; justify-content:flex-end; }
   .sign-block{ text-align:right; min-width:220px; }
-  .sign-image-wrap{ display:none; margin-bottom:6px; }
-  .sign-image-wrap img{ max-height:56px; max-width:220px; }
+  .sign-image-wrap{ display:none; margin-bottom:6px; text-align:right; }
+  .sign-image-wrap img{ display:inline-block; height:auto; }
   .sign-name{ font-family:'Fraunces', serif; font-style:italic; font-weight:500; font-size:26px; margin-bottom:6px; }
   .sign-rule{ border-top:1px solid var(--ink); margin-bottom:6px; }
   .sign-caption{ font-size:11px; color:var(--slate); }
@@ -212,6 +217,14 @@
     display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line);
   }
   .modal-head h3{ margin:0; font-family:'Fraunces',serif; font-weight:560; font-size:18px; }
+  .modal-filter{
+    display:flex; align-items:center; gap:10px; padding:12px 20px;
+    border-bottom:1px solid var(--line); font-size:13px; color:var(--slate);
+  }
+  .modal-filter select{
+    flex:1; padding:7px 9px; border:1px solid var(--line); border-radius:3px;
+    font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:var(--card); cursor:pointer;
+  }
   .history-list{ overflow-y:auto; padding:8px 12px; }
   .hist-row{
     display:flex; justify-content:space-between; align-items:center; padding:13px 10px; border-bottom:1px solid var(--line);
@@ -295,6 +308,7 @@
         <div class="field"><label>Date</label><input id="invDate" type="date" value="2026-08-17"></div>
       </div>
       <div class="field"><label>Terms</label><input id="invTerms" value="Due upon receipt"></div>
+      <div class="field"><label>Brand / project (for filename only)</label><input id="invBrand" placeholder="e.g. Proof"></div>
     </div>
 
     <div class="section">
@@ -340,6 +354,18 @@
       <div class="sig-preview-wrap" id="sigPreviewWrap">
         <img id="sigPreviewImg" alt="Signature preview">
         <button class="icon-btn" id="sigRemoveBtn" title="Remove">×</button>
+      </div>
+      <div class="sig-sliders" id="sigSliders">
+        <div class="slider-row">
+          <label>Size</label>
+          <input type="range" id="sigScale" min="50" max="200" value="100">
+          <span class="slider-val" id="sigScaleVal">100%</span>
+        </div>
+        <div class="slider-row">
+          <label>Spacing</label>
+          <input type="range" id="sigSpacing" min="0" max="40" value="6">
+          <span class="slider-val" id="sigSpacingVal">6px</span>
+        </div>
       </div>
     </div>
 
@@ -424,6 +450,10 @@
       <h3>Invoice history</h3>
       <button class="icon-btn" id="historyCloseBtn">×</button>
     </div>
+    <div class="modal-filter">
+      <label for="historyProfileFilter">Profile</label>
+      <select id="historyProfileFilter"></select>
+    </div>
     <div id="historyList" class="history-list"></div>
   </div>
 </div>
@@ -436,8 +466,8 @@
    Fill these in with your project's URL + anon public key
    (Supabase Dashboard → Settings → API), then reload the page.
    ========================================================= */
-const SUPABASE_URL = "https://odyghekzqnfqlkoettbs.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_Lz6B4yOQcHhAn-eT7h_XDw_pTXdUd51";
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 
 function isConfigured(){
   return SUPABASE_URL && !SUPABASE_URL.includes('YOUR_') &&
@@ -461,7 +491,9 @@ let currentProfile = null;
 const state = {
   clientId: null,
   invoiceId: null,
-  signatureImage: null
+  signatureImage: null,
+  sigScale: 100,
+  sigSpacing: 6
 };
 
 function val(id){ return document.getElementById(id).value; }
@@ -551,13 +583,32 @@ document.getElementById('addItemBtn').addEventListener('click', () => {
    ========================================================= */
 function setSignaturePreview(dataUrl){
   const wrap = document.getElementById('sigPreviewWrap');
+  const sliders = document.getElementById('sigSliders');
   if(dataUrl){
     document.getElementById('sigPreviewImg').src = dataUrl;
     wrap.style.display = 'flex';
+    sliders.style.display = 'block';
   } else {
     wrap.style.display = 'none';
+    sliders.style.display = 'none';
   }
 }
+function syncSignatureSliderInputs(){
+  document.getElementById('sigScale').value = state.sigScale;
+  document.getElementById('sigScaleVal').textContent = state.sigScale + '%';
+  document.getElementById('sigSpacing').value = state.sigSpacing;
+  document.getElementById('sigSpacingVal').textContent = state.sigSpacing + 'px';
+}
+document.getElementById('sigScale').addEventListener('input', (e) => {
+  state.sigScale = parseInt(e.target.value, 10);
+  document.getElementById('sigScaleVal').textContent = state.sigScale + '%';
+  updateSignatureBlock();
+});
+document.getElementById('sigSpacing').addEventListener('input', (e) => {
+  state.sigSpacing = parseInt(e.target.value, 10);
+  document.getElementById('sigSpacingVal').textContent = state.sigSpacing + 'px';
+  updateSignatureBlock();
+});
 document.getElementById('sigFile').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if(!file) return;
@@ -574,6 +625,9 @@ document.getElementById('sigFile').addEventListener('change', (e) => {
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL('image/png');
       state.signatureImage = dataUrl;
+      state.sigScale = 100;
+      state.sigSpacing = 6;
+      syncSignatureSliderInputs();
       setSignaturePreview(dataUrl);
       updatePreview();
     };
@@ -597,7 +651,11 @@ function updateSignatureBlock(){
   const signedName = val('signName');
   if(state.signatureImage){
     imgWrap.style.display = 'block';
-    document.getElementById('pv-signImage').src = state.signatureImage;
+    imgWrap.style.marginBottom = state.sigSpacing + 'px';
+    const img = document.getElementById('pv-signImage');
+    img.src = state.signatureImage;
+    const baseWidth = 160; // px, at 100% scale
+    img.style.width = Math.round(baseWidth * (state.sigScale / 100)) + 'px';
     nameEl.textContent = signedName;
     nameEl.style.fontFamily = "'Inter', sans-serif";
     nameEl.style.fontStyle = 'normal';
@@ -715,6 +773,9 @@ function applyProfile(p){
   document.getElementById('payPaypal').value = p.pay_paypal || '';
   document.getElementById('signName').value = p.from_name || '';
   state.signatureImage = p.signature_image || null;
+  state.sigScale = p.signature_scale || 100;
+  state.sigSpacing = (p.signature_spacing != null) ? p.signature_spacing : 6;
+  syncSignatureSliderInputs();
   setSignaturePreview(state.signatureImage);
   updatePreview();
 }
@@ -739,8 +800,10 @@ document.getElementById('profileSelect').addEventListener('change', async (e) =>
     populateProfileSelect(profilesCache);
     e.target.value = data.id;
     currentProfile = data;
-    applyProfile(data);
-    showToast('Profile created — fill in details, then "Save current info to this profile"');
+    // Deliberately NOT calling applyProfile() here — the current form values
+    // stay as-is so you only need to tweak the name/signature, then hit
+    // "Save current info to this profile" to persist them to the new profile.
+    showToast('New profile created — adjust name/signature, then "Save current info to this profile"');
     return;
   }
   currentProfile = profilesCache.find(p => p.id === value) || null;
@@ -755,7 +818,9 @@ document.getElementById('saveProfileBtn').addEventListener('click', async () => 
     from_email: val('fromEmail'), from_phone: val('fromPhone'),
     pay_acct_name: val('payAcctName'), pay_acct_no: val('payAcctNo'), pay_bank_name: val('payBankName'),
     pay_routing: val('payRouting'), pay_currency: val('payCurrency'), pay_paypal: val('payPaypal'),
-    signature_image: state.signatureImage
+    signature_image: state.signatureImage,
+    signature_scale: state.sigScale,
+    signature_spacing: state.sigSpacing
   };
   const { data, error } = await supa.from('profiles').update(payload).eq('id', currentProfile.id).select().single();
   if(error){ alert('Could not save profile: ' + error.message); return; }
@@ -834,7 +899,8 @@ document.getElementById('saveInvoiceBtn').addEventListener('click', async () => 
       paypal_fee_option: val('paypalFeeOption'),
       total: total,
       sign_name: val('signName'),
-      sign_date: val('signDate') || null
+      sign_date: val('signDate') || null,
+      brand: val('invBrand')
     };
     let result;
     if(state.invoiceId){
@@ -856,15 +922,30 @@ document.getElementById('saveInvoiceBtn').addEventListener('click', async () => 
 /* =========================================================
    History
    ========================================================= */
-async function openHistory(){
-  document.getElementById('historyOverlay').style.display = 'flex';
+function populateHistoryFilter(){
+  const sel = document.getElementById('historyProfileFilter');
+  sel.innerHTML = '';
+  const optAll = document.createElement('option');
+  optAll.value = ''; optAll.textContent = 'All profiles';
+  sel.appendChild(optAll);
+  profilesCache.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id; opt.textContent = p.display_name;
+    sel.appendChild(opt);
+  });
+  sel.value = currentProfile ? currentProfile.id : '';
+}
+
+async function loadHistoryList(profileId){
   const listEl = document.getElementById('historyList');
   listEl.innerHTML = '<div class="hist-empty">Loading…</div>';
   if(!supa){ listEl.innerHTML = '<div class="hist-empty">Connect Supabase to see saved invoices.</div>'; return; }
-  const { data, error } = await supa.from('invoices')
+  let query = supa.from('invoices')
     .select('*, clients(name, note), profiles(display_name)')
     .order('created_at', { ascending:false })
     .limit(100);
+  if(profileId) query = query.eq('profile_id', profileId);
+  const { data, error } = await query;
   if(error){ listEl.innerHTML = '<div class="hist-empty">Could not load history.</div>'; console.error(error); return; }
   if(!data || data.length === 0){ listEl.innerHTML = '<div class="hist-empty">No saved invoices yet.</div>'; return; }
   listEl.innerHTML = '';
@@ -885,6 +966,15 @@ async function openHistory(){
   });
 }
 
+function openHistory(){
+  document.getElementById('historyOverlay').style.display = 'flex';
+  populateHistoryFilter();
+  loadHistoryList(document.getElementById('historyProfileFilter').value);
+}
+document.getElementById('historyProfileFilter').addEventListener('change', (e) => {
+  loadHistoryList(e.target.value);
+});
+
 function loadInvoiceIntoForm(row){
   state.invoiceId = row.id;
   state.clientId = row.client_id;
@@ -903,6 +993,7 @@ function loadInvoiceIntoForm(row){
   document.getElementById('invNo').value = row.invoice_no || '';
   document.getElementById('invDate').value = row.invoice_date || '';
   document.getElementById('invTerms').value = row.terms || '';
+  document.getElementById('invBrand').value = row.brand || '';
   document.getElementById('payCurrency').value = row.currency || 'USD';
   document.getElementById('paypalFeeOption').value = row.paypal_fee_option || 'none';
   document.getElementById('signName').value = row.sign_name || '';
@@ -931,6 +1022,7 @@ document.getElementById('newInvoiceBtn').addEventListener('click', () => {
   state.clientId = null;
   document.getElementById('toName').value = '';
   document.getElementById('toNote').value = '';
+  document.getElementById('invBrand').value = '';
   items = [{ desc:'', amt:0 }];
   renderItemRows();
   updatePreview();
@@ -963,9 +1055,13 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
     });
     pdf.addImage(imgData, 'PNG', 0, 0, wMm, hMm, undefined, 'FAST');
 
-    const invNo = document.getElementById('invNo').value || 'invoice';
-    const fromName = (document.getElementById('fromName').value || 'invoice').replace(/\s+/g,'_');
-    pdf.save(`Invoice_${fromName}_No${invNo}.pdf`);
+    const sanitize = (s) => String(s || '').trim().replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
+    const fromPart = sanitize(val('fromName')) || 'Invoice';
+    const clientFirstWord = sanitize((val('toName') || '').split(/\s+/)[0]) || 'Client';
+    const brandPart = sanitize(val('invBrand'));
+    const nameParts = ['INVOICE', fromPart, clientFirstWord];
+    if(brandPart) nameParts.push(brandPart);
+    pdf.save(`${nameParts.join(' - ')}.pdf`);
   } catch(err){
     alert('Something went wrong generating the PDF. Please try again.');
     console.error(err);
