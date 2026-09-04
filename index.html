@@ -320,7 +320,17 @@
         <div class="field"><label>Invoice number</label><input id="invNo" value="11"></div>
         <div class="field"><label>Date</label><input id="invDate" type="date" value="2026-08-17"></div>
       </div>
-      <div class="field"><label>Terms</label><input id="invTerms" value="Due upon receipt"></div>
+      <div class="row2">
+        <div class="field"><label>Terms</label><input id="invTerms" value="Due upon receipt"></div>
+        <div class="field">
+          <label>Invoice currency</label>
+          <select id="invCurrency">
+            <option value="USD" selected>USD ($)</option>
+            <option value="EUR">EUR (€)</option>
+            <option value="GBP">GBP (£)</option>
+          </select>
+        </div>
+      </div>
       <div class="field"><label>Brand / project (for filename only)</label><input id="invBrand" placeholder="e.g. Proof"></div>
     </div>
 
@@ -450,7 +460,7 @@
           </div>
         </div>
 
-        
+        <div class="footnote">Thank you for the business.</div>
       </div>
     </div>
   </div>
@@ -514,9 +524,12 @@ function val(id){ return document.getElementById(id).value; }
 /* =========================================================
    Formatting helpers
    ========================================================= */
-function fmtMoney(n){
+const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', GBP: '£' };
+function fmtMoney(n, currency){
   const v = isFinite(n) ? n : 0;
-  return '$' + v.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const code = currency || 'USD';
+  const symbol = CURRENCY_SYMBOLS[code] || (code + ' ');
+  return symbol + v.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
 }
 function fmtDate(iso){
   if(!iso) return '';
@@ -710,6 +723,7 @@ function updatePreview(){
   else { rowTerms.style.display = 'none'; }
   document.getElementById('pv-metaStamp').style.display = (invNoVal || invDateVal || invTermsVal) ? 'block' : 'none';
 
+  const invCurrency = val('invCurrency') || 'USD';
   const body = document.getElementById('pv-itemsBody');
   body.innerHTML = '';
   let total = 0;
@@ -719,12 +733,11 @@ function updatePreview(){
     items.forEach(item => {
       total += (parseFloat(item.amt) || 0);
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${escapeHtml(item.desc || '')}</td><td class="amt">${fmtMoney(item.amt || 0)}</td>`;
+      tr.innerHTML = `<td>${escapeHtml(item.desc || '')}</td><td class="amt">${fmtMoney(item.amt || 0, invCurrency)}</td>`;
       body.appendChild(tr);
     });
   }
-  const currency = val('payCurrency') || 'USD';
-  document.getElementById('pv-total').textContent = fmtMoney(total) + ' ' + currency;
+  document.getElementById('pv-total').textContent = fmtMoney(total, invCurrency);
 
   const feeOption = val('paypalFeeOption');
   const noteEl = document.getElementById('pv-paypalNote');
@@ -735,14 +748,14 @@ function updatePreview(){
     const feePct = parseFloat(feeOption);
     const paypalTotal = total / (1 - feePct / 100);
     noteEl.style.display = 'block';
-    noteEl.innerHTML = `${feePct}% fee applies if paying via PayPal — total comes to <b>${fmtMoney(paypalTotal)} ${currency}</b>`;
+    noteEl.innerHTML = `${feePct}% fee applies if paying via PayPal — total comes to <b>${fmtMoney(paypalTotal, invCurrency)}</b>`;
   }
 
   document.getElementById('pv-acctName').textContent = val('payAcctName');
   document.getElementById('pv-bankName').textContent = val('payBankName');
   document.getElementById('pv-acctNo').textContent = val('payAcctNo');
   document.getElementById('pv-routing').textContent = val('payRouting');
-  document.getElementById('pv-currency').textContent = currency;
+  document.getElementById('pv-currency').textContent = val('payCurrency') || 'USD';
   document.getElementById('pv-paypal').textContent = val('payPaypal');
 
   document.getElementById('pv-signDate').textContent = fmtDate(val('signDate'));
@@ -944,7 +957,7 @@ document.getElementById('saveInvoiceBtn').addEventListener('click', async () => 
       profile_id: currentProfile ? currentProfile.id : null,
       client_id: state.clientId,
       items: items,
-      currency: val('payCurrency'),
+      currency: val('invCurrency') || 'USD',
       paypal_fee_option: val('paypalFeeOption'),
       total: total,
       sign_name: val('signName'),
@@ -1008,7 +1021,7 @@ async function loadHistoryList(profileId){
         <div class="hist-title">#${escapeHtml(row.invoice_no || '—')} · ${escapeHtml(clientName)}</div>
         <div class="hist-sub">${escapeHtml(row.invoice_date || '')} · ${escapeHtml(profName)}</div>
       </div>
-      <div class="hist-amt">${fmtMoney(row.total || 0)}</div>
+      <div class="hist-amt">${fmtMoney(row.total || 0, row.currency || 'USD')}</div>
     `;
     div.addEventListener('click', () => loadInvoiceIntoForm(row));
     listEl.appendChild(div);
@@ -1044,7 +1057,7 @@ function loadInvoiceIntoForm(row){
   document.getElementById('invDate').value = row.invoice_date || '';
   document.getElementById('invTerms').value = row.terms || '';
   document.getElementById('invBrand').value = row.brand || '';
-  document.getElementById('payCurrency').value = row.currency || 'USD';
+  document.getElementById('invCurrency').value = row.currency || 'USD';
   document.getElementById('paypalFeeOption').value = row.paypal_fee_option || 'none';
   document.getElementById('signName').value = row.sign_name || '';
   document.getElementById('signDate').value = row.sign_date || '';
@@ -1073,6 +1086,7 @@ document.getElementById('newInvoiceBtn').addEventListener('click', () => {
   document.getElementById('toName').value = '';
   document.getElementById('toNote').value = '';
   document.getElementById('invBrand').value = '';
+  document.getElementById('invCurrency').value = 'USD';
   items = [{ desc:'', amt:0 }];
   renderItemRows();
   updatePreview();
