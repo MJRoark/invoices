@@ -318,18 +318,18 @@
       <h2>Invoice details</h2>
       <div class="row2">
         <div class="field"><label>Invoice number</label><input id="invNo" value="11"></div>
-        <div class="field"><label>Date</label><input id="invDate" type="date" value="2026-08-17"></div>
+        <div class="field"><label>Date</label><input id="invDate" type="date"></div>
       </div>
-      <div class="row2">
-        <div class="field"><label>Terms</label><input id="invTerms" value="Due upon receipt"></div>
-        <div class="field">
-          <label>Invoice currency</label>
-          <select id="invCurrency">
-            <option value="USD" selected>USD ($)</option>
-            <option value="EUR">EUR (€)</option>
-            <option value="GBP">GBP (£)</option>
-          </select>
-        </div>
+      <div class="field">
+        <label>Terms</label>
+        <select id="invTerms">
+          <option value="NET 30" selected>NET 30</option>
+          <option value="NET 15">NET 15</option>
+          <option value="NET 14">NET 14</option>
+          <option value="Due upon receipt">Due upon receipt</option>
+          <option value="__custom__">Custom…</option>
+        </select>
+        <input id="invTermsCustom" placeholder="Enter custom terms" style="margin-top:8px; display:none;">
       </div>
       <div class="field"><label>Brand / project (for filename only)</label><input id="invBrand" placeholder="e.g. Proof"></div>
     </div>
@@ -368,7 +368,7 @@
       <summary>Signature</summary>
       <div class="row2">
         <div class="field"><label>Signed by</label><input id="signName" value="Michael Gazin"></div>
-        <div class="field"><label>Date signed</label><input id="signDate" type="date" value="2026-08-17"></div>
+        <div class="field"><label>Date signed</label><input id="signDate" type="date"></div>
       </div>
       <div class="field">
         <label>Signature image (optional)</label>
@@ -521,15 +521,43 @@ const state = {
 
 function val(id){ return document.getElementById(id).value; }
 
+function todayISO(){
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
+
+const KNOWN_TERMS = ['NET 30', 'NET 15', 'NET 14', 'Due upon receipt'];
+function getTermsValue(){
+  const sel = document.getElementById('invTerms');
+  if(sel.value === '__custom__') return val('invTermsCustom').trim();
+  return sel.value;
+}
+function setTermsValue(text){
+  const sel = document.getElementById('invTerms');
+  const custom = document.getElementById('invTermsCustom');
+  if(!text){
+    sel.value = 'NET 30';
+    custom.style.display = 'none';
+  } else if(KNOWN_TERMS.includes(text)){
+    sel.value = text;
+    custom.style.display = 'none';
+  } else {
+    sel.value = '__custom__';
+    custom.value = text;
+    custom.style.display = 'block';
+  }
+}
+document.getElementById('invTerms').addEventListener('change', (e) => {
+  document.getElementById('invTermsCustom').style.display = (e.target.value === '__custom__') ? 'block' : 'none';
+});
+
 /* =========================================================
    Formatting helpers
    ========================================================= */
-const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', GBP: '£' };
-function fmtMoney(n, currency){
+function fmtMoney(n){
   const v = isFinite(n) ? n : 0;
-  const code = currency || 'USD';
-  const symbol = CURRENCY_SYMBOLS[code] || (code + ' ');
-  return symbol + v.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  return '$' + v.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
 }
 function fmtDate(iso){
   if(!iso) return '';
@@ -711,7 +739,7 @@ function updatePreview(){
 
   const invNoVal = val('invNo').trim();
   const invDateVal = val('invDate');
-  const invTermsVal = val('invTerms').trim();
+  const invTermsVal = getTermsValue();
   const rowNo = document.getElementById('pv-invNoRow');
   const rowDate = document.getElementById('pv-invDateRow');
   const rowTerms = document.getElementById('pv-invTermsRow');
@@ -723,7 +751,6 @@ function updatePreview(){
   else { rowTerms.style.display = 'none'; }
   document.getElementById('pv-metaStamp').style.display = (invNoVal || invDateVal || invTermsVal) ? 'block' : 'none';
 
-  const invCurrency = val('invCurrency') || 'USD';
   const body = document.getElementById('pv-itemsBody');
   body.innerHTML = '';
   let total = 0;
@@ -733,11 +760,12 @@ function updatePreview(){
     items.forEach(item => {
       total += (parseFloat(item.amt) || 0);
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${escapeHtml(item.desc || '')}</td><td class="amt">${fmtMoney(item.amt || 0, invCurrency)}</td>`;
+      tr.innerHTML = `<td>${escapeHtml(item.desc || '')}</td><td class="amt">${fmtMoney(item.amt || 0)}</td>`;
       body.appendChild(tr);
     });
   }
-  document.getElementById('pv-total').textContent = fmtMoney(total, invCurrency);
+  const currency = val('payCurrency') || 'USD';
+  document.getElementById('pv-total').textContent = fmtMoney(total) + ' ' + currency;
 
   const feeOption = val('paypalFeeOption');
   const noteEl = document.getElementById('pv-paypalNote');
@@ -748,14 +776,14 @@ function updatePreview(){
     const feePct = parseFloat(feeOption);
     const paypalTotal = total / (1 - feePct / 100);
     noteEl.style.display = 'block';
-    noteEl.innerHTML = `${feePct}% fee applies if paying via PayPal — total comes to <b>${fmtMoney(paypalTotal, invCurrency)}</b>`;
+    noteEl.innerHTML = `${feePct}% fee applies if paying via PayPal — total comes to <b>${fmtMoney(paypalTotal)} ${currency}</b>`;
   }
 
   document.getElementById('pv-acctName').textContent = val('payAcctName');
   document.getElementById('pv-bankName').textContent = val('payBankName');
   document.getElementById('pv-acctNo').textContent = val('payAcctNo');
   document.getElementById('pv-routing').textContent = val('payRouting');
-  document.getElementById('pv-currency').textContent = val('payCurrency') || 'USD';
+  document.getElementById('pv-currency').textContent = currency;
   document.getElementById('pv-paypal').textContent = val('payPaypal');
 
   document.getElementById('pv-signDate').textContent = fmtDate(val('signDate'));
@@ -935,11 +963,8 @@ async function upsertClient(name, note){
 /* =========================================================
    Save invoice
    ========================================================= */
-document.getElementById('saveInvoiceBtn').addEventListener('click', async () => {
-  if(!supa){ alert('Connect Supabase first — add your project URL and anon key near the top of the script.'); return; }
-  const btn = document.getElementById('saveInvoiceBtn');
-  const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = 'Saving…';
+async function persistInvoice(){
+  if(!supa) return { ok:false, reason:'not-connected' };
   try{
     const client = await upsertClient(val('toName'), val('toNote'));
     if(client){
@@ -953,11 +978,11 @@ document.getElementById('saveInvoiceBtn').addEventListener('click', async () => 
     const payload = {
       invoice_no: val('invNo'),
       invoice_date: val('invDate') || null,
-      terms: val('invTerms'),
+      terms: getTermsValue(),
       profile_id: currentProfile ? currentProfile.id : null,
       client_id: state.clientId,
       items: items,
-      currency: val('invCurrency') || 'USD',
+      currency: val('payCurrency'),
       paypal_fee_option: val('paypalFeeOption'),
       total: total,
       sign_name: val('signName'),
@@ -972,13 +997,22 @@ document.getElementById('saveInvoiceBtn').addEventListener('click', async () => 
     }
     if(result.error) throw result.error;
     state.invoiceId = result.data.id;
-    showToast('Invoice saved');
+    return { ok:true };
   } catch(err){
-    alert('Could not save invoice: ' + err.message);
     console.error(err);
-  } finally {
-    btn.disabled = false; btn.textContent = orig;
+    return { ok:false, reason:'error', error: err };
   }
+}
+
+document.getElementById('saveInvoiceBtn').addEventListener('click', async () => {
+  if(!supa){ alert('Connect Supabase first — add your project URL and anon key near the top of the script.'); return; }
+  const btn = document.getElementById('saveInvoiceBtn');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const res = await persistInvoice();
+  if(res.ok){ showToast('Invoice saved'); }
+  else if(res.reason === 'error'){ alert('Could not save invoice: ' + res.error.message); }
+  btn.disabled = false; btn.textContent = orig;
 });
 
 /* =========================================================
@@ -1016,12 +1050,13 @@ async function loadHistoryList(profileId){
     div.className = 'hist-row';
     const clientName = row.clients ? row.clients.name : '—';
     const profName = row.profiles ? row.profiles.display_name : '—';
+    const brandBit = row.brand ? ` · ${escapeHtml(row.brand)}` : '';
     div.innerHTML = `
       <div class="hist-main">
-        <div class="hist-title">#${escapeHtml(row.invoice_no || '—')} · ${escapeHtml(clientName)}</div>
+        <div class="hist-title">#${escapeHtml(row.invoice_no || '—')} · ${escapeHtml(clientName)}${brandBit}</div>
         <div class="hist-sub">${escapeHtml(row.invoice_date || '')} · ${escapeHtml(profName)}</div>
       </div>
-      <div class="hist-amt">${fmtMoney(row.total || 0, row.currency || 'USD')}</div>
+      <div class="hist-amt">${fmtMoney(row.total || 0)}</div>
     `;
     div.addEventListener('click', () => loadInvoiceIntoForm(row));
     listEl.appendChild(div);
@@ -1055,9 +1090,9 @@ function loadInvoiceIntoForm(row){
   document.getElementById('toNote').value = row.clients ? (row.clients.note || '') : '';
   document.getElementById('invNo').value = row.invoice_no || '';
   document.getElementById('invDate').value = row.invoice_date || '';
-  document.getElementById('invTerms').value = row.terms || '';
+  setTermsValue(row.terms || '');
   document.getElementById('invBrand').value = row.brand || '';
-  document.getElementById('invCurrency').value = row.currency || 'USD';
+  document.getElementById('payCurrency').value = row.currency || 'USD';
   document.getElementById('paypalFeeOption').value = row.paypal_fee_option || 'none';
   document.getElementById('signName').value = row.sign_name || '';
   document.getElementById('signDate').value = row.sign_date || '';
@@ -1086,7 +1121,9 @@ document.getElementById('newInvoiceBtn').addEventListener('click', () => {
   document.getElementById('toName').value = '';
   document.getElementById('toNote').value = '';
   document.getElementById('invBrand').value = '';
-  document.getElementById('invCurrency').value = 'USD';
+  document.getElementById('invDate').value = todayISO();
+  document.getElementById('signDate').value = todayISO();
+  setTermsValue('');
   items = [{ desc:'', amt:0 }];
   renderItemRows();
   updatePreview();
@@ -1126,6 +1163,13 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
     const nameParts = ['INVOICE', fromPart, clientFirstWord];
     if(brandPart) nameParts.push(brandPart);
     pdf.save(`${nameParts.join(' - ')}.pdf`);
+
+    if(supa){
+      btn.textContent = 'Saving…';
+      const res = await persistInvoice();
+      if(res.ok) showToast('Downloaded — invoice saved to history');
+      else if(res.reason === 'error') showToast('Downloaded — but saving to history failed');
+    }
   } catch(err){
     alert('Something went wrong generating the PDF. Please try again.');
     console.error(err);
@@ -1139,6 +1183,8 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
    Init
    ========================================================= */
 renderItemRows();
+document.getElementById('invDate').value = todayISO();
+document.getElementById('signDate').value = todayISO();
 updatePreview();
 updateConnStatus();
 if(!isConfigured()){
