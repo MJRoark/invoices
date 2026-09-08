@@ -308,8 +308,14 @@
       <h2>Bill to</h2>
       <div class="field">
         <label>Client name</label>
-        <input id="toName" list="clientList" value="Breakthrough Creatives" autocomplete="off">
-        <datalist id="clientList"></datalist>
+        <select id="toName">
+          <option value="">Select a client…</option>
+          <option value="__new__">+ New client…</option>
+        </select>
+      </div>
+      <div class="field" id="toNameCustomWrap" style="display:none;">
+        <label>New client name</label>
+        <input id="toNameCustom" placeholder="Enter client name">
       </div>
       <div class="field"><label>Additional info (optional)</label><textarea id="toNote" rows="3" placeholder="Address, account #, attn line, etc. — one item per line"></textarea></div>
     </div>
@@ -460,7 +466,7 @@
           </div>
         </div>
 
-        
+        <div class="footnote">Thank you for the business.</div>
       </div>
     </div>
   </div>
@@ -499,8 +505,24 @@ function isConfigured(){
 let supa = null;
 if(isConfigured() && window.supabase){
   try{ supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
-  catch(e){ console.error('Supabase init failed', e); }
+  catch(e){ console.error('[Invoice Studio] Supabase init failed:', describeError(e)); }
 }
+
+/* Turns any thrown value (Error, Supabase's plain PostgrestError object,
+   string, etc.) into a readable string instead of "[object Object]". */
+function describeError(err){
+  if(!err) return 'Unknown error';
+  if(typeof err === 'string') return err;
+  if(err.message) return err.message + (err.hint ? ` (${err.hint})` : '');
+  try{ return JSON.stringify(err); } catch(e){ return String(err); }
+}
+
+/* Safety net: if any promise rejects without being caught, log it
+   readably instead of letting the browser dump a raw object. */
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[Invoice Studio] Unhandled error:', describeError(event.reason), event.reason);
+  event.preventDefault();
+});
 
 /* =========================================================
    State
@@ -733,7 +755,7 @@ function updatePreview(){
   document.getElementById('pv-fromAddr').innerHTML = `${escapeHtml(val('fromStreet'))}<br>${escapeHtml(val('fromCityState'))}`;
   document.getElementById('pv-fromContact').innerHTML = `${escapeHtml(val('fromEmail'))} &nbsp;·&nbsp; ${escapeHtml(val('fromPhone'))}`;
 
-  document.getElementById('pv-toName').textContent = val('toName');
+  document.getElementById('pv-toName').textContent = getClientNameValue();
   const toNoteLines = val('toNote').split('\n').map(l => l.trim()).filter(Boolean);
   document.getElementById('pv-toNote').innerHTML = toNoteLines.map(escapeHtml).join('<br>');
 
@@ -857,18 +879,23 @@ function applyProfile(p){
 
 async function loadProfiles(){
   if(!supa){ populateProfileSelect([]); setSectionsOpen(true); return; }
-  const { data, error } = await supa.from('profiles').select('*').order('display_name');
-  if(error){ console.error(error); setSectionsOpen(true); return; }
-  profilesCache = data || [];
-  populateProfileSelect(profilesCache);
-  if(profilesCache.length === 0){
+  try{
+    const { data, error } = await supa.from('profiles').select('*').order('display_name');
+    if(error) throw error;
+    profilesCache = data || [];
+    populateProfileSelect(profilesCache);
+    if(profilesCache.length === 0){
+      setSectionsOpen(true);
+    } else {
+      const sel = document.getElementById('profileSelect');
+      sel.value = profilesCache[0].id;
+      currentProfile = profilesCache[0];
+      applyProfile(currentProfile);
+      setSectionsOpen(false);
+    }
+  } catch(err){
+    console.error('[Invoice Studio] Could not load profiles:', describeError(err));
     setSectionsOpen(true);
-  } else {
-    const sel = document.getElementById('profileSelect');
-    sel.value = profilesCache[0].id;
-    currentProfile = profilesCache[0];
-    applyProfile(currentProfile);
-    setSectionsOpen(false);
   }
 }
 
@@ -879,7 +906,7 @@ document.getElementById('profileSelect').addEventListener('change', async (e) =>
     if(!name){ e.target.value = currentProfile ? currentProfile.id : ''; return; }
     if(!supa){ alert('Connect Supabase first.'); e.target.value = ''; return; }
     const { data, error } = await supa.from('profiles').insert({ display_name: name }).select().single();
-    if(error){ alert('Could not create profile: ' + error.message); return; }
+    if(error){ alert('Could not create profile: ' + describeError(error)); return; }
     profilesCache.push(data);
     populateProfileSelect(profilesCache);
     e.target.value = data.id;
@@ -913,7 +940,7 @@ document.getElementById('saveProfileBtn').addEventListener('click', async () => 
     signature_name: val('signName')
   };
   const { data, error } = await supa.from('profiles').update(payload).eq('id', currentProfile.id).select().single();
-  if(error){ alert('Could not save profile: ' + error.message); return; }
+  if(error){ alert('Could not save profile: ' + describeError(error)); return; }
   currentProfile = data;
   const idx = profilesCache.findIndex(p => p.id === data.id);
   if(idx >= 0) profilesCache[idx] = data;
@@ -923,41 +950,94 @@ document.getElementById('saveProfileBtn').addEventListener('click', async () => 
 /* =========================================================
    Clients
    ========================================================= */
+function getClientNameValue(){
+  const sel = document.getElementById('toName');
+  if(sel.value === '__new__') return val('toNameCustom').trim();
+  const c = clientsCache.find(x => x.id === sel.value);
+  return c ? c.name : '';
+}
 function renderClientList(){
-  const dl = document.getElementById('clientList');
-  dl.innerHTML = '';
+  const sel = document.getElementById('toName');
+  const prevValue = sel.value;
+  sel.innerHTML = '';
+  const optPlaceholder = document.createElement('option');
+  optPlaceholder.value = '';
+  optPlaceholder.textContent = clientsCache.length ? 'Select a client…' : 'No saved clients yet';
+  sel.appendChild(optPlaceholder);
   clientsCache.forEach(c => {
     const opt = document.createElement('option');
-    opt.value = c.name;
-    dl.appendChild(opt);
+    opt.value = c.id;
+    opt.textContent = c.name;
+    sel.appendChild(opt);
   });
+  const optNew = document.createElement('option');
+  optNew.value = '__new__';
+  optNew.textContent = '+ New client…';
+  sel.appendChild(optNew);
+  if(prevValue && [...sel.options].some(o => o.value === prevValue)){
+    sel.value = prevValue;
+  }
+}
+function applyClientSelection(clientId){
+  const c = clientsCache.find(x => x.id === clientId);
+  if(!c) return;
+  state.clientId = c.id;
+  document.getElementById('toNote').value = c.note || '';
+  if(Array.isArray(c.last_items) && c.last_items.length){
+    items = c.last_items.map(it => ({ desc: it.desc || '', amt: parseFloat(it.amt) || 0 }));
+    renderItemRows();
+  }
+  updatePreview();
 }
 async function loadClients(){
   if(!supa){ clientsCache = []; renderClientList(); return; }
-  const { data, error } = await supa.from('clients').select('*').order('name');
-  if(error){ console.error(error); return; }
-  clientsCache = data || [];
-  renderClientList();
+  try{
+    const { data, error } = await supa.from('clients').select('*').order('name');
+    if(error) throw error;
+    clientsCache = data || [];
+    renderClientList();
+  } catch(err){
+    console.error('[Invoice Studio] Could not load clients:', describeError(err));
+  }
 }
-document.getElementById('toName').addEventListener('input', (e) => {
-  const match = clientsCache.find(c => c.name.toLowerCase() === e.target.value.trim().toLowerCase());
-  if(match){
-    state.clientId = match.id;
-    document.getElementById('toNote').value = match.note || '';
+document.getElementById('toName').addEventListener('change', (e) => {
+  const value = e.target.value;
+  const customWrap = document.getElementById('toNameCustomWrap');
+  if(value === '__new__'){
+    customWrap.style.display = 'block';
+    document.getElementById('toNameCustom').value = '';
+    document.getElementById('toNameCustom').focus();
+    state.clientId = null;
+    document.getElementById('toNote').value = '';
+    updatePreview();
+  } else if(value === ''){
+    customWrap.style.display = 'none';
+    state.clientId = null;
     updatePreview();
   } else {
-    state.clientId = null;
+    customWrap.style.display = 'none';
+    applyClientSelection(value);
   }
 });
-async function upsertClient(name, note){
+async function upsertClient(name, note, itemsForClient){
   if(!supa) return null;
   const trimmed = (name || '').trim();
   if(!trimmed) return null;
-  const { data, error } = await supa.from('clients')
-    .upsert({ name: trimmed, note: note || null }, { onConflict: 'name' })
-    .select().single();
-  if(error){ console.error(error); alert('Could not save client: ' + error.message); return null; }
-  return data;
+  try{
+    const payload = { name: trimmed, note: note || null };
+    if(Array.isArray(itemsForClient) && itemsForClient.length){
+      payload.last_items = itemsForClient;
+    }
+    const { data, error } = await supa.from('clients')
+      .upsert(payload, { onConflict: 'name' })
+      .select().single();
+    if(error) throw error;
+    return data;
+  } catch(err){
+    console.error('[Invoice Studio] Could not save client:', describeError(err));
+    alert('Could not save client: ' + describeError(err));
+    return null;
+  }
 }
 
 /* =========================================================
@@ -966,12 +1046,14 @@ async function upsertClient(name, note){
 async function persistInvoice(){
   if(!supa) return { ok:false, reason:'not-connected' };
   try{
-    const client = await upsertClient(val('toName'), val('toNote'));
+    const client = await upsertClient(getClientNameValue(), val('toNote'), items);
     if(client){
       state.clientId = client.id;
       const idx = clientsCache.findIndex(c => c.id === client.id);
       if(idx >= 0) clientsCache[idx] = client; else clientsCache.push(client);
       renderClientList();
+      document.getElementById('toName').value = client.id;
+      document.getElementById('toNameCustomWrap').style.display = 'none';
     }
     let total = 0;
     items.forEach(it => total += (parseFloat(it.amt) || 0));
@@ -999,7 +1081,7 @@ async function persistInvoice(){
     state.invoiceId = result.data.id;
     return { ok:true };
   } catch(err){
-    console.error(err);
+    console.error('[Invoice Studio] Could not save invoice:', describeError(err));
     return { ok:false, reason:'error', error: err };
   }
 }
@@ -1011,7 +1093,7 @@ document.getElementById('saveInvoiceBtn').addEventListener('click', async () => 
   btn.disabled = true; btn.textContent = 'Saving…';
   const res = await persistInvoice();
   if(res.ok){ showToast('Invoice saved'); }
-  else if(res.reason === 'error'){ alert('Could not save invoice: ' + res.error.message); }
+  else if(res.reason === 'error'){ alert('Could not save invoice: ' + describeError(res.error)); }
   btn.disabled = false; btn.textContent = orig;
 });
 
@@ -1036,31 +1118,36 @@ async function loadHistoryList(profileId){
   const listEl = document.getElementById('historyList');
   listEl.innerHTML = '<div class="hist-empty">Loading…</div>';
   if(!supa){ listEl.innerHTML = '<div class="hist-empty">Connect Supabase to see saved invoices.</div>'; return; }
-  let query = supa.from('invoices')
-    .select('*, clients(name, note), profiles(display_name)')
-    .order('created_at', { ascending:false })
-    .limit(100);
-  if(profileId) query = query.eq('profile_id', profileId);
-  const { data, error } = await query;
-  if(error){ listEl.innerHTML = '<div class="hist-empty">Could not load history.</div>'; console.error(error); return; }
-  if(!data || data.length === 0){ listEl.innerHTML = '<div class="hist-empty">No saved invoices yet.</div>'; return; }
-  listEl.innerHTML = '';
-  data.forEach(row => {
-    const div = document.createElement('div');
-    div.className = 'hist-row';
-    const clientName = row.clients ? row.clients.name : '—';
-    const profName = row.profiles ? row.profiles.display_name : '—';
-    const brandBit = row.brand ? ` · ${escapeHtml(row.brand)}` : '';
-    div.innerHTML = `
-      <div class="hist-main">
-        <div class="hist-title">#${escapeHtml(row.invoice_no || '—')} · ${escapeHtml(clientName)}${brandBit}</div>
-        <div class="hist-sub">${escapeHtml(row.invoice_date || '')} · ${escapeHtml(profName)}</div>
-      </div>
-      <div class="hist-amt">${fmtMoney(row.total || 0)}</div>
-    `;
-    div.addEventListener('click', () => loadInvoiceIntoForm(row));
-    listEl.appendChild(div);
-  });
+  try{
+    let query = supa.from('invoices')
+      .select('*, clients(name, note), profiles(display_name)')
+      .order('created_at', { ascending:false })
+      .limit(100);
+    if(profileId) query = query.eq('profile_id', profileId);
+    const { data, error } = await query;
+    if(error) throw error;
+    if(!data || data.length === 0){ listEl.innerHTML = '<div class="hist-empty">No saved invoices yet.</div>'; return; }
+    listEl.innerHTML = '';
+    data.forEach(row => {
+      const div = document.createElement('div');
+      div.className = 'hist-row';
+      const clientName = row.clients ? row.clients.name : '—';
+      const profName = row.profiles ? row.profiles.display_name : '—';
+      const brandBit = row.brand ? ` · ${escapeHtml(row.brand)}` : '';
+      div.innerHTML = `
+        <div class="hist-main">
+          <div class="hist-title">#${escapeHtml(row.invoice_no || '—')} · ${escapeHtml(clientName)}${brandBit}</div>
+          <div class="hist-sub">${escapeHtml(row.invoice_date || '')} · ${escapeHtml(profName)}</div>
+        </div>
+        <div class="hist-amt">${fmtMoney(row.total || 0)}</div>
+      `;
+      div.addEventListener('click', () => loadInvoiceIntoForm(row));
+      listEl.appendChild(div);
+    });
+  } catch(err){
+    console.error('[Invoice Studio] Could not load history:', describeError(err));
+    listEl.innerHTML = '<div class="hist-empty">Could not load history.</div>';
+  }
 }
 
 function openHistory(){
@@ -1086,8 +1173,26 @@ function loadInvoiceIntoForm(row){
     }
   }
 
-  document.getElementById('toName').value = row.clients ? row.clients.name : '';
-  document.getElementById('toNote').value = row.clients ? (row.clients.note || '') : '';
+  const clientRow = row.clients;
+  if(clientRow){
+    const found = clientsCache.find(c => c.name === clientRow.name);
+    if(found){
+      document.getElementById('toName').value = found.id;
+      document.getElementById('toNameCustomWrap').style.display = 'none';
+      state.clientId = found.id;
+    } else {
+      document.getElementById('toName').value = '__new__';
+      document.getElementById('toNameCustomWrap').style.display = 'block';
+      document.getElementById('toNameCustom').value = clientRow.name;
+      state.clientId = row.client_id || null;
+    }
+    document.getElementById('toNote').value = clientRow.note || '';
+  } else {
+    document.getElementById('toName').value = '';
+    document.getElementById('toNameCustomWrap').style.display = 'none';
+    document.getElementById('toNote').value = '';
+    state.clientId = null;
+  }
   document.getElementById('invNo').value = row.invoice_no || '';
   document.getElementById('invDate').value = row.invoice_date || '';
   setTermsValue(row.terms || '');
@@ -1119,6 +1224,8 @@ document.getElementById('newInvoiceBtn').addEventListener('click', () => {
   state.invoiceId = null;
   state.clientId = null;
   document.getElementById('toName').value = '';
+  document.getElementById('toNameCustomWrap').style.display = 'none';
+  document.getElementById('toNameCustom').value = '';
   document.getElementById('toNote').value = '';
   document.getElementById('invBrand').value = '';
   document.getElementById('invDate').value = todayISO();
@@ -1158,7 +1265,7 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
 
     const sanitize = (s) => String(s || '').trim().replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
     const fromPart = sanitize(val('fromName')) || 'Invoice';
-    const clientFirstWord = sanitize((val('toName') || '').split(/\s+/)[0]) || 'Client';
+    const clientFirstWord = sanitize((getClientNameValue() || '').split(/\s+/)[0]) || 'Client';
     const brandPart = sanitize(val('invBrand'));
     const nameParts = ['INVOICE', fromPart, clientFirstWord];
     if(brandPart) nameParts.push(brandPart);
@@ -1172,7 +1279,7 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
     }
   } catch(err){
     alert('Something went wrong generating the PDF. Please try again.');
-    console.error(err);
+    console.error('[Invoice Studio] PDF generation failed:', describeError(err));
   } finally {
     btn.disabled = false;
     btn.textContent = original;
