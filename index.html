@@ -1278,19 +1278,14 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
   const node = document.getElementById('invoice-page');
   try{
     const canvas = await html2canvas(node, { scale: 5, useCORS: true, backgroundColor: '#ffffff' });
-    const imgData = canvas.toDataURL('image/png');
-    const { jsPDF } = window.jspdf;
+const imgData = canvas.toDataURL('image/jpeg', 0.92);
 
-    const pxToMm = px => px * 25.4 / 96;
-    const wMm = pxToMm(node.offsetWidth);
-    const hMm = pxToMm(node.offsetHeight);
-
-    const pdf = new jsPDF({
-      orientation: wMm > hMm ? 'landscape' : 'portrait',
-      unit: 'mm',
-      format: [wMm, hMm]
-    });
-    pdf.addImage(imgData, 'PNG', 0, 0, wMm, hMm, undefined, 'NONE');
+const pdf = new jsPDF({
+  orientation: wMm > hMm ? 'landscape' : 'portrait',
+  unit: 'mm',
+  format: [wMm, hMm]
+});
+pdf.addImage(imgData, 'JPEG', 0, 0, wMm, hMm, undefined, 'MEDIUM');
 
     const sanitize = (s) => String(s || '').trim().replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
     const fromPart = sanitize(val('fromName')) || 'Invoice';
