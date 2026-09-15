@@ -1277,7 +1277,7 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
 
   const node = document.getElementById('invoice-page');
   try{
-    const canvas = await html2canvas(node, { scale: 2.5, useCORS: true, backgroundColor: '#ffffff' });
+    const canvas = await html2canvas(node, { scale: 5, useCORS: true, backgroundColor: '#ffffff' });
     const imgData = canvas.toDataURL('image/png');
     const { jsPDF } = window.jspdf;
 
@@ -1290,7 +1290,7 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
       unit: 'mm',
       format: [wMm, hMm]
     });
-    pdf.addImage(imgData, 'PNG', 0, 0, wMm, hMm, undefined, 'FAST');
+    pdf.addImage(imgData, 'PNG', 0, 0, wMm, hMm, undefined, 'NONE');
 
     const sanitize = (s) => String(s || '').trim().replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
     const fromPart = sanitize(val('fromName')) || 'Invoice';
