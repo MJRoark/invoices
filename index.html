@@ -516,8 +516,6 @@ if(isConfigured() && window.supabase){
   catch(e){ console.error('[Invoice Studio] Supabase init failed:', describeError(e)); }
 }
 
-/* Turns any thrown value (Error, Supabase's plain PostgrestError object,
-   string, etc.) into a readable string instead of "[object Object]". */
 function describeError(err){
   if(!err) return 'Unknown error';
   if(typeof err === 'string') return err;
@@ -525,16 +523,11 @@ function describeError(err){
   try{ return JSON.stringify(err); } catch(e){ return String(err); }
 }
 
-/* Safety net: if any promise rejects without being caught, log it
-   readably instead of letting the browser dump a raw object. */
 window.addEventListener('unhandledrejection', (event) => {
   console.error('[Invoice Studio] Unhandled error:', describeError(event.reason), event.reason);
   event.preventDefault();
 });
 
-/* =========================================================
-   State
-   ========================================================= */
 let items = [
   { desc: '', amt: 0 }
 ];
@@ -582,9 +575,6 @@ document.getElementById('invTerms').addEventListener('change', (e) => {
   document.getElementById('invTermsCustom').style.display = (e.target.value === '__custom__') ? 'block' : 'none';
 });
 
-/* =========================================================
-   Formatting helpers
-   ========================================================= */
 const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', GBP: '£' };
 function fmtMoney(n, currency){
   const v = isFinite(n) ? n : 0;
@@ -601,9 +591,6 @@ function fmtDate(iso){
 function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
 function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-/* =========================================================
-   Toast
-   ========================================================= */
 let toastTimer = null;
 function showToast(msg){
   const t = document.getElementById('toast');
@@ -617,18 +604,12 @@ function showToast(msg){
   }, 2200);
 }
 
-/* =========================================================
-   Connection status
-   ========================================================= */
 function updateConnStatus(){
   const dot = document.getElementById('connStatus');
   if(supa){ dot.classList.add('on'); dot.title = 'Connected to Supabase'; }
   else { dot.classList.remove('on'); dot.title = 'Not connected'; }
 }
 
-/* =========================================================
-   Line items
-   ========================================================= */
 function renderItemRows(){
   const wrap = document.getElementById('itemsWrap');
   wrap.innerHTML = '';
@@ -665,9 +646,6 @@ document.getElementById('addItemBtn').addEventListener('click', () => {
   updatePreview();
 });
 
-/* =========================================================
-   Signature upload
-   ========================================================= */
 function setSignaturePreview(dataUrl){
   const wrap = document.getElementById('sigPreviewWrap');
   const sliders = document.getElementById('sigSliders');
@@ -729,9 +707,6 @@ document.getElementById('sigRemoveBtn').addEventListener('click', () => {
   updatePreview();
 });
 
-/* =========================================================
-   Preview rendering
-   ========================================================= */
 function updateSignatureBlock(){
   const imgWrap = document.getElementById('pv-signImageWrap');
   const nameEl = document.getElementById('pv-signName');
@@ -741,7 +716,7 @@ function updateSignatureBlock(){
     imgWrap.style.marginBottom = state.sigSpacing + 'px';
     const img = document.getElementById('pv-signImage');
     img.src = state.signatureImage;
-    const baseWidth = 160; // px, at 100% scale
+    const baseWidth = 160;
     img.style.width = Math.round(baseWidth * (state.sigScale / 100)) + 'px';
     nameEl.textContent = signedName;
     nameEl.style.fontFamily = "'Inter', sans-serif";
@@ -828,9 +803,6 @@ document.querySelectorAll('.form-col input, .form-col textarea, .form-col select
   inp.addEventListener('change', updatePreview);
 });
 
-/* =========================================================
-   Collapsible sections (From / Payment / Signature)
-   ========================================================= */
 function setSectionsOpen(open){
   ['detailsFrom', 'detailsPayment', 'detailsSignature'].forEach(id => {
     const el = document.getElementById(id);
@@ -838,9 +810,6 @@ function setSectionsOpen(open){
   });
 }
 
-/* =========================================================
-   Profiles
-   ========================================================= */
 function populateProfileSelect(list){
   const sel = document.getElementById('profileSelect');
   sel.innerHTML = '';
@@ -938,9 +907,6 @@ document.getElementById('profileSelect').addEventListener('change', async (e) =>
     populateProfileSelect(profilesCache);
     e.target.value = data.id;
     currentProfile = data;
-    // Deliberately NOT calling applyProfile() here — the current form values
-    // stay as-is so you only need to tweak the name/signature, then hit
-    // "Save current info to this profile" to persist them to the new profile.
     setSectionsOpen(true);
     showToast('New profile created — adjust name/signature, then "Save current info to this profile"');
     return;
@@ -974,9 +940,6 @@ document.getElementById('saveProfileBtn').addEventListener('click', async () => 
   showToast('Profile saved');
 });
 
-/* =========================================================
-   Clients
-   ========================================================= */
 function getClientNameValue(){
   const sel = document.getElementById('toName');
   if(sel.value === '__new__') return val('toNameCustom').trim();
@@ -1067,9 +1030,6 @@ async function upsertClient(name, note, itemsForClient){
   }
 }
 
-/* =========================================================
-   Save invoice
-   ========================================================= */
 async function persistInvoice(){
   if(!supa) return { ok:false, reason:'not-connected' };
   try{
@@ -1124,9 +1084,6 @@ document.getElementById('saveInvoiceBtn').addEventListener('click', async () => 
   btn.disabled = false; btn.textContent = orig;
 });
 
-/* =========================================================
-   History
-   ========================================================= */
 function populateHistoryFilter(){
   const sel = document.getElementById('historyProfileFilter');
   sel.innerHTML = '';
@@ -1266,9 +1223,6 @@ document.getElementById('newInvoiceBtn').addEventListener('click', () => {
   showToast('Started a new invoice');
 });
 
-/* =========================================================
-   PDF export
-   ========================================================= */
 document.getElementById('downloadBtn').addEventListener('click', async () => {
   const btn = document.getElementById('downloadBtn');
   const original = btn.textContent;
@@ -1278,14 +1232,19 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
   const node = document.getElementById('invoice-page');
   try{
     const canvas = await html2canvas(node, { scale: 5, useCORS: true, backgroundColor: '#ffffff' });
-const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const { jsPDF } = window.jspdf;
 
-const pdf = new jsPDF({
-  orientation: wMm > hMm ? 'landscape' : 'portrait',
-  unit: 'mm',
-  format: [wMm, hMm]
-});
-pdf.addImage(imgData, 'JPEG', 0, 0, wMm, hMm, undefined, 'MEDIUM');
+    const pxToMm = px => px * 25.4 / 96;
+    const wMm = pxToMm(node.offsetWidth);
+    const hMm = pxToMm(node.offsetHeight);
+
+    const pdf = new jsPDF({
+      orientation: wMm > hMm ? 'landscape' : 'portrait',
+      unit: 'mm',
+      format: [wMm, hMm]
+    });
+    pdf.addImage(imgData, 'JPEG', 0, 0, wMm, hMm, undefined, 'FAST');
 
     const sanitize = (s) => String(s || '').trim().replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
     const fromPart = sanitize(val('fromName')) || 'Invoice';
@@ -1310,9 +1269,6 @@ pdf.addImage(imgData, 'JPEG', 0, 0, wMm, hMm, undefined, 'MEDIUM');
   }
 });
 
-/* =========================================================
-   Init
-   ========================================================= */
 renderItemRows();
 document.getElementById('invDate').value = todayISO();
 document.getElementById('signDate').value = todayISO();
