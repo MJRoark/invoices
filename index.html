@@ -323,19 +323,29 @@
     <div class="section">
       <h2>Invoice details</h2>
       <div class="row2">
-        <div class="field"><label>Invoice number</label><input id="invNo" value="11"></div>
+        <div class="field"><label>Invoice number</label><input id="invNo"></div>
         <div class="field"><label>Date</label><input id="invDate" type="date"></div>
       </div>
-      <div class="field">
-        <label>Terms</label>
-        <select id="invTerms">
-          <option value="NET 30" selected>NET 30</option>
-          <option value="NET 15">NET 15</option>
-          <option value="NET 14">NET 14</option>
-          <option value="Due upon receipt">Due upon receipt</option>
-          <option value="__custom__">Custom…</option>
-        </select>
-        <input id="invTermsCustom" placeholder="Enter custom terms" style="margin-top:8px; display:none;">
+      <div class="row2">
+        <div class="field">
+          <label>Terms</label>
+          <select id="invTerms">
+            <option value="NET 30" selected>NET 30</option>
+            <option value="NET 15">NET 15</option>
+            <option value="NET 14">NET 14</option>
+            <option value="Due upon receipt">Due upon receipt</option>
+            <option value="__custom__">Custom…</option>
+          </select>
+          <input id="invTermsCustom" placeholder="Enter custom terms" style="margin-top:8px; display:none;">
+        </div>
+        <div class="field">
+          <label>Invoice currency</label>
+          <select id="invCurrency">
+            <option value="USD" selected>USD ($)</option>
+            <option value="EUR">EUR (€)</option>
+            <option value="GBP">GBP (£)</option>
+          </select>
+        </div>
       </div>
       <div class="field"><label>Brand / project (for filename only)</label><input id="invBrand" placeholder="e.g. Proof"></div>
     </div>
@@ -465,8 +475,6 @@
             <div class="sign-caption">Authorized signature &nbsp;·&nbsp; <span id="pv-signDate">Aug 17, 2026</span></div>
           </div>
         </div>
-
-        <div class="footnote">Thank you for the business.</div>
       </div>
     </div>
   </div>
@@ -528,7 +536,7 @@ window.addEventListener('unhandledrejection', (event) => {
    State
    ========================================================= */
 let items = [
-  { desc: "UGC Video — Voicenote Confession (BC052, couple)", amt: 350 }
+  { desc: '', amt: 0 }
 ];
 let clientsCache = [];
 let profilesCache = [];
@@ -577,9 +585,12 @@ document.getElementById('invTerms').addEventListener('change', (e) => {
 /* =========================================================
    Formatting helpers
    ========================================================= */
-function fmtMoney(n){
+const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', GBP: '£' };
+function fmtMoney(n, currency){
   const v = isFinite(n) ? n : 0;
-  return '$' + v.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const code = currency || 'USD';
+  const symbol = CURRENCY_SYMBOLS[code] || (code + ' ');
+  return symbol + v.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
 }
 function fmtDate(iso){
   if(!iso) return '';
@@ -773,6 +784,7 @@ function updatePreview(){
   else { rowTerms.style.display = 'none'; }
   document.getElementById('pv-metaStamp').style.display = (invNoVal || invDateVal || invTermsVal) ? 'block' : 'none';
 
+  const invCurrency = val('invCurrency') || 'USD';
   const body = document.getElementById('pv-itemsBody');
   body.innerHTML = '';
   let total = 0;
@@ -782,12 +794,11 @@ function updatePreview(){
     items.forEach(item => {
       total += (parseFloat(item.amt) || 0);
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${escapeHtml(item.desc || '')}</td><td class="amt">${fmtMoney(item.amt || 0)}</td>`;
+      tr.innerHTML = `<td>${escapeHtml(item.desc || '')}</td><td class="amt">${fmtMoney(item.amt || 0, invCurrency)}</td>`;
       body.appendChild(tr);
     });
   }
-  const currency = val('payCurrency') || 'USD';
-  document.getElementById('pv-total').textContent = fmtMoney(total) + ' ' + currency;
+  document.getElementById('pv-total').textContent = fmtMoney(total, invCurrency);
 
   const feeOption = val('paypalFeeOption');
   const noteEl = document.getElementById('pv-paypalNote');
@@ -798,14 +809,14 @@ function updatePreview(){
     const feePct = parseFloat(feeOption);
     const paypalTotal = total / (1 - feePct / 100);
     noteEl.style.display = 'block';
-    noteEl.innerHTML = `${feePct}% fee applies if paying via PayPal — total comes to <b>${fmtMoney(paypalTotal)} ${currency}</b>`;
+    noteEl.innerHTML = `${feePct}% fee applies if paying via PayPal — total comes to <b>${fmtMoney(paypalTotal, invCurrency)}</b>`;
   }
 
   document.getElementById('pv-acctName').textContent = val('payAcctName');
   document.getElementById('pv-bankName').textContent = val('payBankName');
   document.getElementById('pv-acctNo').textContent = val('payAcctNo');
   document.getElementById('pv-routing').textContent = val('payRouting');
-  document.getElementById('pv-currency').textContent = currency;
+  document.getElementById('pv-currency').textContent = val('payCurrency') || 'USD';
   document.getElementById('pv-paypal').textContent = val('payPaypal');
 
   document.getElementById('pv-signDate').textContent = fmtDate(val('signDate'));
@@ -877,6 +888,21 @@ function applyProfile(p){
   updatePreview();
 }
 
+async function loadMostRecentInvoiceForProfile(profileId){
+  if(!supa || !profileId) return;
+  try{
+    const { data, error } = await supa.from('invoices')
+      .select('*, clients(name, note), profiles(display_name)')
+      .eq('profile_id', profileId)
+      .order('created_at', { ascending:false })
+      .limit(1);
+    if(error) throw error;
+    if(data && data.length) loadInvoiceIntoForm(data[0], { silent:true });
+  } catch(err){
+    console.error('[Invoice Studio] Could not load most recent invoice:', describeError(err));
+  }
+}
+
 async function loadProfiles(){
   if(!supa){ populateProfileSelect([]); setSectionsOpen(true); return; }
   try{
@@ -892,6 +918,7 @@ async function loadProfiles(){
       currentProfile = profilesCache[0];
       applyProfile(currentProfile);
       setSectionsOpen(false);
+      await loadMostRecentInvoiceForProfile(currentProfile.id);
     }
   } catch(err){
     console.error('[Invoice Studio] Could not load profiles:', describeError(err));
@@ -1064,7 +1091,7 @@ async function persistInvoice(){
       profile_id: currentProfile ? currentProfile.id : null,
       client_id: state.clientId,
       items: items,
-      currency: val('payCurrency'),
+      currency: val('invCurrency') || 'USD',
       paypal_fee_option: val('paypalFeeOption'),
       total: total,
       sign_name: val('signName'),
@@ -1139,7 +1166,7 @@ async function loadHistoryList(profileId){
           <div class="hist-title">#${escapeHtml(row.invoice_no || '—')} · ${escapeHtml(clientName)}${brandBit}</div>
           <div class="hist-sub">${escapeHtml(row.invoice_date || '')} · ${escapeHtml(profName)}</div>
         </div>
-        <div class="hist-amt">${fmtMoney(row.total || 0)}</div>
+        <div class="hist-amt">${fmtMoney(row.total || 0, row.currency || 'USD')}</div>
       `;
       div.addEventListener('click', () => loadInvoiceIntoForm(row));
       listEl.appendChild(div);
@@ -1159,7 +1186,8 @@ document.getElementById('historyProfileFilter').addEventListener('change', (e) =
   loadHistoryList(e.target.value);
 });
 
-function loadInvoiceIntoForm(row){
+function loadInvoiceIntoForm(row, opts){
+  const silent = opts && opts.silent;
   state.invoiceId = row.id;
   state.clientId = row.client_id;
 
@@ -1197,7 +1225,7 @@ function loadInvoiceIntoForm(row){
   document.getElementById('invDate').value = row.invoice_date || '';
   setTermsValue(row.terms || '');
   document.getElementById('invBrand').value = row.brand || '';
-  document.getElementById('payCurrency').value = row.currency || 'USD';
+  document.getElementById('invCurrency').value = row.currency || 'USD';
   document.getElementById('paypalFeeOption').value = row.paypal_fee_option || 'none';
   document.getElementById('signName').value = row.sign_name || '';
   document.getElementById('signDate').value = row.sign_date || '';
@@ -1209,7 +1237,7 @@ function loadInvoiceIntoForm(row){
   updatePreview();
 
   document.getElementById('historyOverlay').style.display = 'none';
-  showToast('Loaded invoice #' + (row.invoice_no || ''));
+  if(!silent) showToast('Loaded invoice #' + (row.invoice_no || ''));
 }
 
 document.getElementById('historyBtn').addEventListener('click', openHistory);
@@ -1228,6 +1256,7 @@ document.getElementById('newInvoiceBtn').addEventListener('click', () => {
   document.getElementById('toNameCustom').value = '';
   document.getElementById('toNote').value = '';
   document.getElementById('invBrand').value = '';
+  document.getElementById('invCurrency').value = 'USD';
   document.getElementById('invDate').value = todayISO();
   document.getElementById('signDate').value = todayISO();
   setTermsValue('');
@@ -1297,8 +1326,10 @@ updateConnStatus();
 if(!isConfigured()){
   document.getElementById('configBanner').style.display = 'block';
 }
-loadProfiles();
-loadClients();
+(async () => {
+  await loadClients();
+  await loadProfiles();
+})();
 </script>
 
 </body>
