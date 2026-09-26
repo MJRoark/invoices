@@ -269,6 +269,7 @@
   </div>
   <div class="topbar-actions">
     <span id="connStatus" class="conn-dot"></span>
+    <button class="btn ghost" id="signOutBtn" style="display:none;">Sign out</button>
     <button class="btn ghost" id="newInvoiceBtn">New</button>
     <button class="btn ghost" id="historyBtn">History</button>
     <button class="btn ghost" id="saveInvoiceBtn">Save invoice</button>
@@ -367,7 +368,7 @@
         <div class="field"><label>Routing no.</label><input id="payRouting" value="322271627"></div>
       </div>
       <div class="row2">
-        <div class="field"><label>Currency</label><input id="payCurrency" value="USD"></div>
+        <div class="field"><label>Bank currency</label><input id="payCurrency" value="USD"></div>
         <div class="field"><label>PayPal email</label><input id="payPaypal" value="michaelgazin@gmail.com"></div>
       </div>
       <div class="field">
@@ -461,7 +462,7 @@
             <div class="pay-item"><span class="k">Bank name</span><span class="v" id="pv-bankName">Chase Bank</span></div>
             <div class="pay-item"><span class="k">Account no.</span><span class="v" id="pv-acctNo">382558598</span></div>
             <div class="pay-item"><span class="k">Routing no.</span><span class="v" id="pv-routing">322271627</span></div>
-            <div class="pay-item"><span class="k">Currency</span><span class="v" id="pv-currency">USD</span></div>
+            <div class="pay-item"><span class="k">Bank currency</span><span class="v" id="pv-currency">USD</span></div>
             <div class="pay-item"><span class="k">PayPal</span><span class="v" id="pv-paypal">michaelgazin@gmail.com</span></div>
             <div class="pay-note" id="pv-paypalNote" style="display:none;"></div>
           </div>
@@ -475,6 +476,38 @@
             <div class="sign-caption">Authorized signature &nbsp;·&nbsp; <span id="pv-signDate">Aug 17, 2026</span></div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sign-in gate -->
+<div id="authOverlay" class="overlay" style="display:none;">
+  <div class="modal" style="width:360px;">
+    <div class="modal-head">
+      <h3>Sign in</h3>
+    </div>
+    <div style="padding:22px;">
+      <div class="field"><label>Email</label><input type="email" id="authEmail" autocomplete="username"></div>
+      <div class="field"><label>Password</label><input type="password" id="authPassword" autocomplete="current-password"></div>
+      <div id="authError" style="color:var(--danger); font-size:13px; margin-bottom:12px; display:none;"></div>
+      <button class="btn" id="authSignInBtn" style="width:100%;">Sign in</button>
+    </div>
+  </div>
+</div>
+
+<!-- Save / overwrite confirmation -->
+<div id="saveChoiceOverlay" class="overlay" style="display:none;">
+  <div class="modal" style="width:420px;">
+    <div class="modal-head">
+      <h3>Save invoice</h3>
+    </div>
+    <div style="padding:20px;">
+      <p id="saveChoiceText" style="margin:0 0 16px 0; font-size:14px; color:var(--ink-soft); line-height:1.5;"></p>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <button class="btn" id="saveChoiceOverwrite" style="width:100%;">Overwrite this invoice</button>
+        <button class="btn ghost" id="saveChoiceNew" style="width:100%;">Save as a new invoice</button>
+        <button class="btn ghost" id="saveChoiceCancel" style="width:100%; border-color:transparent;">Cancel</button>
       </div>
     </div>
   </div>
@@ -857,21 +890,6 @@ function applyProfile(p){
   updatePreview();
 }
 
-async function loadMostRecentInvoiceForProfile(profileId){
-  if(!supa || !profileId) return;
-  try{
-    const { data, error } = await supa.from('invoices')
-      .select('*, clients(name, note), profiles(display_name)')
-      .eq('profile_id', profileId)
-      .order('created_at', { ascending:false })
-      .limit(1);
-    if(error) throw error;
-    if(data && data.length) loadInvoiceIntoForm(data[0], { silent:true });
-  } catch(err){
-    console.error('[Invoice Studio] Could not load most recent invoice:', describeError(err));
-  }
-}
-
 async function loadProfiles(){
   if(!supa){ populateProfileSelect([]); setSectionsOpen(true); return; }
   try{
@@ -887,7 +905,6 @@ async function loadProfiles(){
       currentProfile = profilesCache[0];
       applyProfile(currentProfile);
       setSectionsOpen(false);
-      await loadMostRecentInvoiceForProfile(currentProfile.id);
     }
   } catch(err){
     console.error('[Invoice Studio] Could not load profiles:', describeError(err));
@@ -1030,8 +1047,46 @@ async function upsertClient(name, note, itemsForClient){
   }
 }
 
+function confirmSaveChoice(invoiceNo){
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('saveChoiceOverlay');
+    const text = document.getElementById('saveChoiceText');
+    text.textContent = invoiceNo
+      ? `Invoice #${invoiceNo} has already been saved. What would you like to do?`
+      : 'This invoice has already been saved. What would you like to do?';
+    overlay.style.display = 'flex';
+
+    const overwriteBtn = document.getElementById('saveChoiceOverwrite');
+    const newBtn = document.getElementById('saveChoiceNew');
+    const cancelBtn = document.getElementById('saveChoiceCancel');
+
+    function cleanup(result){
+      overlay.style.display = 'none';
+      overwriteBtn.removeEventListener('click', onOverwrite);
+      newBtn.removeEventListener('click', onNew);
+      cancelBtn.removeEventListener('click', onCancel);
+      overlay.removeEventListener('click', onBackdrop);
+      resolve(result);
+    }
+    function onOverwrite(){ cleanup('overwrite'); }
+    function onNew(){ cleanup('new'); }
+    function onCancel(){ cleanup('cancel'); }
+    function onBackdrop(e){ if(e.target === overlay) cleanup('cancel'); }
+
+    overwriteBtn.addEventListener('click', onOverwrite);
+    newBtn.addEventListener('click', onNew);
+    cancelBtn.addEventListener('click', onCancel);
+    overlay.addEventListener('click', onBackdrop);
+  });
+}
+
 async function persistInvoice(){
   if(!supa) return { ok:false, reason:'not-connected' };
+  if(state.invoiceId){
+    const choice = await confirmSaveChoice(val('invNo'));
+    if(choice === 'cancel') return { ok:false, reason:'cancelled' };
+    if(choice === 'new') state.invoiceId = null;
+  }
   try{
     const client = await upsertClient(getClientNameValue(), val('toNote'), items);
     if(client){
@@ -1081,6 +1136,7 @@ document.getElementById('saveInvoiceBtn').addEventListener('click', async () => 
   const res = await persistInvoice();
   if(res.ok){ showToast('Invoice saved'); }
   else if(res.reason === 'error'){ alert('Could not save invoice: ' + describeError(res.error)); }
+  else if(res.reason === 'cancelled'){ showToast('Save cancelled'); }
   btn.disabled = false; btn.textContent = orig;
 });
 
@@ -1205,7 +1261,7 @@ document.getElementById('historyOverlay').addEventListener('click', (e) => {
   if(e.target.id === 'historyOverlay') document.getElementById('historyOverlay').style.display = 'none';
 });
 
-document.getElementById('newInvoiceBtn').addEventListener('click', () => {
+function startNewInvoice(){
   state.invoiceId = null;
   state.clientId = null;
   document.getElementById('toName').value = '';
@@ -1220,6 +1276,9 @@ document.getElementById('newInvoiceBtn').addEventListener('click', () => {
   items = [{ desc:'', amt:0 }];
   renderItemRows();
   updatePreview();
+}
+document.getElementById('newInvoiceBtn').addEventListener('click', () => {
+  startNewInvoice();
   showToast('Started a new invoice');
 });
 
@@ -1231,7 +1290,24 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
 
   const node = document.getElementById('invoice-page');
   try{
-    const canvas = await html2canvas(node, { scale: 5, useCORS: true, backgroundColor: '#ffffff' });
+    // Make sure webfonts (Fraunces/Inter) are fully settled before every
+    // capture, not just the first one — a stale/mid-load font state is
+    // what causes html2canvas's text measurements to drift after edits.
+    if(document.fonts && document.fonts.ready){
+      await document.fonts.ready;
+    }
+    // Give the browser a couple of frames to finish laying out whatever
+    // was just edited before we snapshot it.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const canvas = await html2canvas(node, {
+      scale: 5,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      letterRendering: true   // per-letter positioning — prevents the
+                               // batched-line text rendering from drifting
+                               // out of sync with the variable-font glyphs
+    });
     const imgData = canvas.toDataURL('image/jpeg', 0.92);
     const { jsPDF } = window.jspdf;
 
@@ -1259,6 +1335,7 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
       const res = await persistInvoice();
       if(res.ok) showToast('Downloaded — invoice saved to history');
       else if(res.reason === 'error') showToast('Downloaded — but saving to history failed');
+      else if(res.reason === 'cancelled') showToast('Downloaded — not saved');
     }
   } catch(err){
     alert('Something went wrong generating the PDF. Please try again.');
@@ -1269,17 +1346,74 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
   }
 });
 
-renderItemRows();
-document.getElementById('invDate').value = todayISO();
-document.getElementById('signDate').value = todayISO();
-updatePreview();
-updateConnStatus();
-if(!isConfigured()){
-  document.getElementById('configBanner').style.display = 'block';
+/* =========================================================
+   Auth gate
+   The rest of the app (clients/profiles/history) only loads
+   once a real signed-in session exists — the anon key alone
+   is not enough now that RLS requires auth.uid().
+   ========================================================= */
+function showAuthGate(){
+  document.getElementById('authOverlay').style.display = 'flex';
 }
-(async () => {
+function hideAuthGate(){
+  document.getElementById('authOverlay').style.display = 'none';
+}
+function showAuthError(msg){
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+document.getElementById('authSignInBtn').addEventListener('click', async () => {
+  const email = val('authEmail').trim();
+  const password = val('authPassword');
+  const btn = document.getElementById('authSignInBtn');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  const { error } = await supa.auth.signInWithPassword({ email, password });
+  btn.disabled = false; btn.textContent = orig;
+  if(error){ showAuthError(describeError(error)); return; }
+  document.getElementById('authError').style.display = 'none';
+  hideAuthGate();
+  await bootApp();
+});
+document.getElementById('authPassword').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') document.getElementById('authSignInBtn').click();
+});
+
+document.getElementById('signOutBtn').addEventListener('click', async () => {
+  if(!supa) return;
+  await supa.auth.signOut();
+  location.reload();
+});
+
+if(supa){
+  supa.auth.onAuthStateChange((event) => {
+    if(event === 'SIGNED_OUT') showAuthGate();
+  });
+}
+
+async function bootApp(){
+  startNewInvoice();
+  updateConnStatus();
   await loadClients();
   await loadProfiles();
+}
+
+(async () => {
+  if(!isConfigured()){
+    document.getElementById('configBanner').style.display = 'block';
+    await bootApp();
+    return;
+  }
+  document.getElementById('signOutBtn').style.display = 'inline-block';
+  const { data: { session } } = await supa.auth.getSession();
+  if(session){
+    hideAuthGate();
+    await bootApp();
+  } else {
+    showAuthGate();
+  }
 })();
 </script>
 
