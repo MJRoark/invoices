@@ -156,6 +156,7 @@
     padding:64px 60px 56px 60px;
     color:var(--ink);
     font-family:'Inter',sans-serif;
+    font-variant-ligatures:none; /* Prevents canvas text measurement glitches on ligatures */
   }
 
   .inv-header{ display:flex; justify-content:space-between; align-items:flex-start; gap:20px; }
@@ -1290,25 +1291,20 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
 
   const node = document.getElementById('invoice-page');
   try{
-    // Make sure webfonts (Fraunces/Inter) are fully settled before every
-    // capture, not just the first one — a stale/mid-load font state is
-    // what causes html2canvas's text measurements to drift after edits.
+    // Ensure all web fonts are loaded and ready before taking snapshot
     if(document.fonts && document.fonts.ready){
       await document.fonts.ready;
     }
-    // Give the browser a couple of frames to finish laying out whatever
-    // was just edited before we snapshot it.
+    // Give browser two frames to settle layout after any DOM or font changes
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
     const canvas = await html2canvas(node, {
-      scale: 5,
+      scale: 3, // Crisp ~300 DPI export without browser memory crashes
       useCORS: true,
-      backgroundColor: '#ffffff',
-      letterRendering: true   // per-letter positioning — prevents the
-                               // batched-line text rendering from drifting
-                               // out of sync with the variable-font glyphs
+      backgroundColor: '#ffffff'
+      // letterRendering removed to preserve natural font kerning & spacing
     });
-    const imgData = canvas.toDataURL('image/jpeg', 0.92);
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const { jsPDF } = window.jspdf;
 
     const pxToMm = px => px * 25.4 / 96;
@@ -1348,9 +1344,6 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
 
 /* =========================================================
    Auth gate
-   The rest of the app (clients/profiles/history) only loads
-   once a real signed-in session exists — the anon key alone
-   is not enough now that RLS requires auth.uid().
    ========================================================= */
 function showAuthGate(){
   document.getElementById('authOverlay').style.display = 'flex';
