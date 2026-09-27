@@ -1304,9 +1304,17 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
       scale: 5,
       useCORS: true,
       backgroundColor: '#ffffff',
-      letterRendering: true   // per-letter positioning — prevents the
-                               // batched-line text rendering from drifting
-                               // out of sync with the variable-font glyphs
+      width: node.offsetWidth,
+      height: node.offsetHeight,
+      foreignObjectRendering: true   // delegates actual text layout to the
+                                      // browser's real rendering engine via
+                                      // an SVG <foreignObject>, instead of
+                                      // html2canvas's own manual per-glyph
+                                      // measurement — that manual engine is
+                                      // the actual source of the drift with
+                                      // variable fonts like Fraunces, and
+                                      // letterRendering only changed which
+                                      // symptom of it showed up, not the cause
     });
     const imgData = canvas.toDataURL('image/jpeg', 0.92);
     const { jsPDF } = window.jspdf;
