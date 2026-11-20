@@ -311,7 +311,7 @@
 </div>
 
 <div class="banner" id="configBanner" style="display:none;">
-  Not connected to Supabase yet — add your project URL and anon key near the top of the <script> block (look for <code>SUPABASE_URL</code> / <code>SUPABASE_ANON_KEY</code>) to enable saved clients, profiles, and invoice history. PDF export still works without it.
+  Not connected to Supabase yet — add your project URL and anon key near the top of the script block (look for <code>SUPABASE_URL</code> / <code>SUPABASE_ANON_KEY</code>) to enable saved clients, profiles, and invoice history. PDF export still works without it.
 </div>
 
 <div class="layout">
@@ -703,8 +703,15 @@ function fmtDate(iso){
   const dt = new Date(y, m-1, d);
   return dt.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 }
-function escapeAttr(s){ return String(s).replace(/"/g,'"'); }
-function escapeHtml(s){ return String(s).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>'); }
+function escapeAttr(s){
+  return String(s).replace(/"/g, '\x26quot;');
+}
+function escapeHtml(s){
+  return String(s)
+    .replace(/&/g, '\x26amp;')
+    .replace(/</g, '\x26lt;')
+    .replace(/>/g, '\x26gt;');
+}
 
 let toastTimer = null;
 function showToast(msg){
@@ -867,7 +874,7 @@ function updatePreview(){
 
   const email = val('fromEmail').trim();
   const phone = val('fromPhone').trim();
-  document.getElementById('pv-fromContact').innerHTML = [email, phone].filter(Boolean).map(escapeHtml).join('  ·  ');
+  document.getElementById('pv-fromContact').innerHTML = [email, phone].filter(Boolean).map(escapeHtml).join(' \u00a0·\u00a0 ');
 
   document.getElementById('pv-toName').textContent = getClientNameValue();
   const toNoteLines = val('toNote').split('\n').map(l => l.trim()).filter(Boolean);
@@ -1079,7 +1086,6 @@ async function upsertBankingProfile({ silent = false } = {}){
   };
 
   try{
-    // Match existing banking profile by exact (routing, acct_no) combo when both are present
     let existing = null;
     if(routing && acctNo){
       existing = bankingProfilesCache.find(bp =>
@@ -1443,7 +1449,6 @@ async function persistInvoice(){
     if(choice === 'new') state.invoiceId = null;
   }
   try{
-    // Sync banking profile (updates if routing+acct_no exists, inserts if new)
     if(val('payRouting').trim() && val('payAcctNo').trim()){
       await upsertBankingProfile({ silent: true });
     }
@@ -1853,17 +1858,22 @@ async function bootApp(){
 }
 
 (async () => {
-  if(!supa){
-    document.getElementById('configBanner').style.display = 'block';
-    await bootApp();
-    return;
-  }
-  document.getElementById('signOutBtn').style.display = 'inline-block';
-  const { data: { session } } = await supa.auth.getSession();
-  if(session){
-    hideAuthGate();
-    await bootApp();
-  } else {
+  try{
+    if(!supa){
+      document.getElementById('configBanner').style.display = 'block';
+      await bootApp();
+      return;
+    }
+    document.getElementById('signOutBtn').style.display = 'inline-block';
+    const { data: { session } } = await supa.auth.getSession();
+    if(session){
+      hideAuthGate();
+      await bootApp();
+    } else {
+      showAuthGate();
+    }
+  } catch(err){
+    console.error('[Invoice Studio] Startup failed:', describeError(err));
     showAuthGate();
   }
 })();
